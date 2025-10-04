@@ -1,19 +1,20 @@
+import 'dart:io';
+
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:nihongo_japanese_app/screens/about_screen.dart';
+import 'package:nihongo_japanese_app/screens/auth_screen.dart';
 import 'package:nihongo_japanese_app/screens/help_support_screen.dart';
 import 'package:nihongo_japanese_app/screens/language_settings_screen.dart';
 import 'package:nihongo_japanese_app/screens/theme_shop_screen.dart';
-import 'package:provider/provider.dart';
-import 'package:nihongo_japanese_app/theme/theme_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:nihongo_japanese_app/services/profile_image_service.dart';
 import 'package:nihongo_japanese_app/services/auth_service.dart';
-import 'package:nihongo_japanese_app/screens/auth_screen.dart';
-import 'package:firebase_database/firebase_database.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'package:nihongo_japanese_app/services/profile_image_service.dart';
+import 'package:nihongo_japanese_app/theme/theme_provider.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -32,14 +33,14 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   final ProfileImageService _profileImageService = ProfileImageService();
   final AuthService _authService = AuthService();
   final ImagePicker _picker = ImagePicker();
-  
+
   // User data
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   String _selectedGender = 'Prefer not to say';
   String? _profileImageUrl;
-  
+
   // List of preset profile images
   final List<String> _predefinedAvatars = [
     'assets/images/profile/female.png',
@@ -49,7 +50,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     'assets/images/profile/man (2).png',
     'assets/images/profile/woman.png',
   ];
-  
+
   @override
   void initState() {
     super.initState();
@@ -60,7 +61,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
     _animationController.forward();
   }
-  
+
   @override
   void dispose() {
     _firstNameController.dispose();
@@ -69,7 +70,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     _animationController.dispose();
     super.dispose();
   }
-  
+
   Future<void> _loadUserData() async {
     setState(() {
       _isLoading = true;
@@ -79,14 +80,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       final user = _authService.currentUser;
       if (user != null) {
         // Load from Firebase first
-        final snapshot = await FirebaseDatabase.instance
-            .ref()
-            .child('users/${user.uid}')
-            .get();
-        
+        final snapshot = await FirebaseDatabase.instance.ref().child('users/${user.uid}').get();
+
         if (snapshot.exists) {
           final userData = snapshot.value as Map<dynamic, dynamic>;
-          
+
           setState(() {
             _firstNameController.text = userData['firstName'] ?? '';
             _lastNameController.text = userData['lastName'] ?? '';
@@ -95,7 +93,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             _profileImageUrl = userData['profileImageUrl'];
             _isNewUser = false;
           });
-          
+
           // Sync with SharedPreferences
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('first_name', userData['firstName'] ?? '');
@@ -120,11 +118,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       });
     }
   }
-  
+
   Future<void> _loadFromSharedPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     final hasCompletedProfile = prefs.getBool('has_completed_profile') ?? false;
-    
+
     setState(() {
       _firstNameController.text = prefs.getString('first_name') ?? '';
       _lastNameController.text = prefs.getString('last_name') ?? '';
@@ -132,15 +130,15 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       _isNewUser = !hasCompletedProfile;
       _isEditing = _isNewUser;
     });
-    
+
     // Set email from current user if available
     final user = _authService.currentUser;
     if (user?.email != null) {
       _emailController.text = user!.email!;
     }
   }
-  
-    Future<void> _saveUserData() async {
+
+  Future<void> _saveUserData() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -152,7 +150,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     try {
       HapticFeedback.mediumImpact();
       final user = _authService.currentUser;
-      
+
       if (user != null) {
         // Save to Firebase Realtime Database
         final userData = {
@@ -164,41 +162,39 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           'isAdmin': false, // Preserve admin status
           'updatedAt': ServerValue.timestamp,
         };
-        
+
         // If this is a new user, add createdAt timestamp
         if (_isNewUser) {
           userData['createdAt'] = ServerValue.timestamp;
         }
-        
-        await FirebaseDatabase.instance
-            .ref()
-            .child('users/${user.uid}')
-            .update(userData);
-        
+
+        await FirebaseDatabase.instance.ref().child('users/${user.uid}').update(userData);
+
         // Update Firebase Auth display name - wrap in try-catch to handle type casting errors
         try {
-          await user.updateDisplayName('${_firstNameController.text.trim()} ${_lastNameController.text.trim()}');
+          await user.updateDisplayName(
+              '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}');
           debugPrint('Display name updated successfully');
         } catch (displayNameError) {
           debugPrint('Display name update error (ignoring): $displayNameError');
           // Ignore display name update errors, they don't affect the core functionality
         }
-        
+
         debugPrint('User data saved to Firebase successfully');
       }
-      
+
       // Save to SharedPreferences for local access
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('first_name', _firstNameController.text.trim());
       await prefs.setString('last_name', _lastNameController.text.trim());
       await prefs.setString('gender', _selectedGender);
       await prefs.setBool('has_completed_profile', true);
-      
+
       setState(() {
         _isNewUser = false;
         _isEditing = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -220,47 +216,45 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       }
     } catch (e) {
       debugPrint('Error saving user data: $e');
-      
+
       // Check if this is the known type casting error that doesn't actually prevent the operation
-      if (e.toString().contains('PigeonUserInfo') || 
+      if (e.toString().contains('PigeonUserInfo') ||
           e.toString().contains('type cast') ||
           e.toString().contains('List<Object?>')) {
         debugPrint('Type casting error detected - checking if operation was actually successful');
-        
+
         // Wait a moment and then verify if the data was actually saved
         await Future.delayed(const Duration(milliseconds: 1000));
-        
+
         try {
           // Check if data was saved to Firebase
           final user = _authService.currentUser;
           if (user != null) {
-            final snapshot = await FirebaseDatabase.instance
-                .ref()
-                .child('users/${user.uid}')
-                .get();
-            
+            final snapshot = await FirebaseDatabase.instance.ref().child('users/${user.uid}').get();
+
             if (snapshot.exists) {
               final savedData = snapshot.value as Map<dynamic, dynamic>;
               final savedFirstName = savedData['firstName'] ?? '';
               final savedLastName = savedData['lastName'] ?? '';
-              
+
               // Check if the data we just tried to save is actually there
-              if (savedFirstName == _firstNameController.text.trim() && 
+              if (savedFirstName == _firstNameController.text.trim() &&
                   savedLastName == _lastNameController.text.trim()) {
-                debugPrint('Data was saved successfully despite type error - showing success message');
-                
+                debugPrint(
+                    'Data was saved successfully despite type error - showing success message');
+
                 // Save to SharedPreferences
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.setString('first_name', _firstNameController.text.trim());
                 await prefs.setString('last_name', _lastNameController.text.trim());
                 await prefs.setString('gender', _selectedGender);
                 await prefs.setBool('has_completed_profile', true);
-                
+
                 setState(() {
                   _isNewUser = false;
                   _isEditing = false;
                 });
-                
+
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -288,7 +282,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           debugPrint('Error verifying save operation: $verificationError');
         }
       }
-      
+
       // Only show error message for genuine errors
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -317,7 +311,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       });
     }
   }
-    
+
   Future<void> _updateProfileImage() async {
     showModalBottomSheet(
       context: context,
@@ -374,7 +368,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       },
     );
   }
-  
+
   Widget _buildImageOption({
     required IconData icon,
     required String label,
@@ -407,7 +401,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       ),
     );
   }
-  
+
   Future<void> _pickImageFromGallery() async {
     try {
       final XFile? image = await _picker.pickImage(
@@ -416,7 +410,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         maxHeight: 512,
         imageQuality: 80,
       );
-      
+
       if (image != null) {
         await _uploadImageToFirebase(image.path);
       }
@@ -432,39 +426,37 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       }
     }
   }
-  
+
   Future<void> _uploadImageToFirebase(String imagePath) async {
     try {
       setState(() {
         _isSaving = true;
       });
-      
+
       final user = _authService.currentUser;
       if (user == null) {
         throw Exception('No user authenticated');
       }
-      
+
       // Upload to Firebase Storage
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('profile_images/${user.uid}');
-      
+      final storageRef = FirebaseStorage.instance.ref().child('profile_images/${user.uid}');
+
       await storageRef.putFile(File(imagePath));
       final downloadUrl = await storageRef.getDownloadURL();
-      
+
       // Update profile image URL in Firebase Database
       await FirebaseDatabase.instance
           .ref()
           .child('users/${user.uid}/profileImageUrl')
           .set(downloadUrl);
-      
+
       // Save to local profile image service
       await _profileImageService.saveProfileImage(imagePath, isCustom: true);
-      
+
       setState(() {
         _profileImageUrl = downloadUrl;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -495,7 +487,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       });
     }
   }
-  
+
   void _showPresetImagesDialog() {
     showModalBottomSheet(
       context: context,
@@ -548,13 +540,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       },
     );
   }
-  
+
   Future<void> _setPresetImage(String assetPath) async {
     try {
       setState(() {
         _isSaving = true;
       });
-      
+
       final user = _authService.currentUser;
       if (user != null) {
         // Update Firebase with preset image path
@@ -563,14 +555,14 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             .child('users/${user.uid}/profileImageUrl')
             .set(assetPath);
       }
-      
+
       // Save to local profile image service
       await _profileImageService.saveProfileImage(assetPath, isCustom: false);
-      
+
       setState(() {
         _profileImageUrl = assetPath;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -601,41 +593,36 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       });
     }
   }
-  
+
   Future<void> _removeProfileImage() async {
     try {
       setState(() {
         _isSaving = true;
       });
-      
+
       final user = _authService.currentUser;
       if (user != null) {
         // Remove from Firebase Storage if it's a custom image
         if (_profileImageUrl != null && _profileImageUrl!.startsWith('https://')) {
           try {
-            final storageRef = FirebaseStorage.instance
-                .ref()
-                .child('profile_images/${user.uid}');
+            final storageRef = FirebaseStorage.instance.ref().child('profile_images/${user.uid}');
             await storageRef.delete();
           } catch (e) {
             debugPrint('Error deleting image from storage: $e');
           }
         }
-        
+
         // Remove from Firebase Database
-        await FirebaseDatabase.instance
-            .ref()
-            .child('users/${user.uid}/profileImageUrl')
-            .remove();
+        await FirebaseDatabase.instance.ref().child('users/${user.uid}/profileImageUrl').remove();
       }
-      
+
       // Remove from local storage
       await _profileImageService.removeProfileImage();
-      
+
       setState(() {
         _profileImageUrl = null;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -666,7 +653,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       });
     }
   }
-  
+
   Future<void> _logout() async {
     // Show confirmation dialog
     final shouldLogout = await showDialog<bool>(
@@ -726,12 +713,12 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final themeProvider = Provider.of<ThemeProvider>(context);
-    
+
     if (_isLoading) {
       return Scaffold(
         body: Center(
@@ -750,7 +737,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         ),
       );
     }
-    
+
     return Scaffold(
       body: SafeArea(
         child: Stack(
@@ -762,10 +749,8 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                 children: [
                   _buildProfileHeader(context),
                   const SizedBox(height: 24),
-                  if (_isEditing || _isNewUser)
-                    _buildUserForm(context),
-                  if (!_isEditing && !_isNewUser)
-                    _buildUserInfoDisplay(context),
+                  if (_isEditing || _isNewUser) _buildUserForm(context),
+                  if (!_isEditing && !_isNewUser) _buildUserInfoDisplay(context),
                   const SizedBox(height: 24),
                   _buildSettingsSection(context, isDarkMode, themeProvider),
                   const SizedBox(height: 32),
@@ -802,7 +787,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       ),
     );
   }
-  
+
   Widget _buildProfileHeader(BuildContext context) {
     return AnimatedBuilder(
       animation: _animationController,
@@ -814,7 +799,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           parent: _animationController,
           curve: const Interval(0.0, 0.6, curve: Curves.easeOutCubic),
         ));
-        
+
         final fadeAnimation = Tween<double>(
           begin: 0.0,
           end: 1.0,
@@ -822,7 +807,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           parent: _animationController,
           curve: const Interval(0.2, 0.8, curve: Curves.easeOut),
         ));
-        
+
         return SlideTransition(
           position: slideAnimation,
           child: FadeTransition(
@@ -970,7 +955,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       },
     );
   }
-  
+
   Widget _buildProfileImage() {
     if (_profileImageUrl != null) {
       if (_profileImageUrl!.startsWith('assets/')) {
@@ -989,8 +974,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             return Center(
               child: CircularProgressIndicator(
                 value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
+                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
                     : null,
                 valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
               ),
@@ -1026,7 +1010,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       );
     }
   }
-  
+
   Widget _buildUserForm(BuildContext context) {
     return AnimatedBuilder(
       animation: _animationController,
@@ -1038,7 +1022,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           parent: _animationController,
           curve: const Interval(0.3, 0.8, curve: Curves.easeOutCubic),
         ));
-        
+
         final fadeAnimation = Tween<double>(
           begin: 0.0,
           end: 1.0,
@@ -1046,7 +1030,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           parent: _animationController,
           curve: const Interval(0.3, 0.8, curve: Curves.easeOut),
         ));
-        
+
         return SlideTransition(
           position: slideAnimation,
           child: FadeTransition(
@@ -1208,14 +1192,16 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                   width: double.infinity,
                                   height: 56,
                                   child: OutlinedButton(
-                                    onPressed: _isSaving ? null : () {
-                                      HapticFeedback.lightImpact();
-                                      setState(() {
-                                        _isEditing = false;
-                                        // Reset form to original values
-                                        _loadUserData();
-                                      });
-                                    },
+                                    onPressed: _isSaving
+                                        ? null
+                                        : () {
+                                            HapticFeedback.lightImpact();
+                                            setState(() {
+                                              _isEditing = false;
+                                              // Reset form to original values
+                                              _loadUserData();
+                                            });
+                                          },
                                     style: OutlinedButton.styleFrom(
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(12),
@@ -1244,7 +1230,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       },
     );
   }
-  
+
   Widget _buildAnimatedTextField({
     required TextEditingController controller,
     required String labelText,
@@ -1287,7 +1273,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       },
     );
   }
-  
+
   Widget _buildUserInfoDisplay(BuildContext context) {
     return AnimatedBuilder(
       animation: _animationController,
@@ -1299,7 +1285,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           parent: _animationController,
           curve: const Interval(0.3, 0.8, curve: Curves.easeOutCubic),
         ));
-        
+
         final fadeAnimation = Tween<double>(
           begin: 0.0,
           end: 1.0,
@@ -1307,7 +1293,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           parent: _animationController,
           curve: const Interval(0.3, 0.8, curve: Curves.easeOut),
         ));
-        
+
         return SlideTransition(
           position: slideAnimation,
           child: FadeTransition(
@@ -1369,7 +1355,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       },
     );
   }
-  
+
   Widget _buildInfoCard(
     BuildContext context, {
     required String title,
@@ -1449,7 +1435,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       },
     );
   }
-  
+
   Widget _buildSettingsSection(BuildContext context, bool isDarkMode, ThemeProvider themeProvider) {
     return AnimatedBuilder(
       animation: _animationController,
@@ -1461,7 +1447,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           parent: _animationController,
           curve: const Interval(0.4, 0.9, curve: Curves.easeOutCubic),
         ));
-        
+
         final fadeAnimation = Tween<double>(
           begin: 0.0,
           end: 1.0,
@@ -1469,7 +1455,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           parent: _animationController,
           curve: const Interval(0.4, 0.9, curve: Curves.easeOut),
         ));
-        
+
         return SlideTransition(
           position: slideAnimation,
           child: FadeTransition(
@@ -1515,7 +1501,8 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                             ),
                           ),
                           title: 'Theme Shop',
-                          subtitle: Text('Get new themes! Current: ${themeProvider.getThemeName(themeProvider.appThemeMode)}'),
+                          subtitle: Text(
+                              'Get new themes! Current: ${themeProvider.getThemeName(themeProvider.appThemeMode)}'),
                           trailing: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
@@ -1542,13 +1529,15 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                             Navigator.push(
                               context,
                               PageRouteBuilder(
-                                pageBuilder: (context, animation, secondaryAnimation) => 
-                                  const ThemeShopScreen(),
-                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                pageBuilder: (context, animation, secondaryAnimation) =>
+                                    const ThemeShopScreen(),
+                                transitionsBuilder:
+                                    (context, animation, secondaryAnimation, child) {
                                   var begin = const Offset(1.0, 0.0);
                                   var end = Offset.zero;
                                   var curve = Curves.easeInOutCubic;
-                                  var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                                  var tween =
+                                      Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
                                   return SlideTransition(
                                     position: animation.drive(tween),
                                     child: child,
@@ -1588,13 +1577,15 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                             Navigator.push(
                               context,
                               PageRouteBuilder(
-                                pageBuilder: (context, animation, secondaryAnimation) => 
-                                  const LanguageSettingsScreen(),
-                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                pageBuilder: (context, animation, secondaryAnimation) =>
+                                    const LanguageSettingsScreen(),
+                                transitionsBuilder:
+                                    (context, animation, secondaryAnimation, child) {
                                   var begin = const Offset(1.0, 0.0);
                                   var end = Offset.zero;
                                   var curve = Curves.easeInOutCubic;
-                                  var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                                  var tween =
+                                      Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
                                   return SlideTransition(
                                     position: animation.drive(tween),
                                     child: child,
@@ -1669,13 +1660,15 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                             Navigator.push(
                               context,
                               PageRouteBuilder(
-                                pageBuilder: (context, animation, secondaryAnimation) => 
-                                  const HelpSupportScreen(),
-                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                pageBuilder: (context, animation, secondaryAnimation) =>
+                                    const HelpSupportScreen(),
+                                transitionsBuilder:
+                                    (context, animation, secondaryAnimation, child) {
                                   var begin = const Offset(1.0, 0.0);
                                   var end = Offset.zero;
                                   var curve = Curves.easeInOutCubic;
-                                  var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                                  var tween =
+                                      Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
                                   return SlideTransition(
                                     position: animation.drive(tween),
                                     child: child,
@@ -1715,13 +1708,15 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                             Navigator.push(
                               context,
                               PageRouteBuilder(
-                                pageBuilder: (context, animation, secondaryAnimation) => 
-                                  const AboutScreen(),
-                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                pageBuilder: (context, animation, secondaryAnimation) =>
+                                    const AboutScreen(),
+                                transitionsBuilder:
+                                    (context, animation, secondaryAnimation, child) {
                                   var begin = const Offset(1.0, 0.0);
                                   var end = Offset.zero;
                                   var curve = Curves.easeInOutCubic;
-                                  var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                                  var tween =
+                                      Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
                                   return SlideTransition(
                                     position: animation.drive(tween),
                                     child: child,

@@ -22,12 +22,12 @@ class FirebaseInitializer {
 
   static Future<FirebaseApp> initialize() async {
     if (_initialized && _app != null) {
-      print('Firebase already initialized: ${_app!.name}');
+      debugPrint('Firebase already initialized: ${_app!.name}');
       return _app!;
     }
 
     if (_isInitializing) {
-      print('Firebase initialization in progress, waiting...');
+      debugPrint('Firebase initialization in progress, waiting...');
       while (_isInitializing) {
         await Future.delayed(const Duration(milliseconds: 50));
       }
@@ -38,23 +38,23 @@ class FirebaseInitializer {
     if (Firebase.apps.isNotEmpty) {
       _app = Firebase.apps.first;
       _initialized = true;
-      print('Reusing existing Firebase app: ${_app!.name}');
+      debugPrint('Reusing existing Firebase app: ${_app!.name}');
       return _app!;
     }
 
     _isInitializing = true;
-    print('Initializing Firebase...');
+    debugPrint('Initializing Firebase...');
     try {
       _app = await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       );
 
       _initialized = true;
-      print('Firebase initialized successfully with app: ${_app!.name}');
+      debugPrint('Firebase initialized successfully with app: ${_app!.name}');
       return _app!;
     } catch (e, stackTrace) {
-      print('Firebase initialization error: $e');
-      print('Stack trace: $stackTrace');
+      debugPrint('Firebase initialization error: $e');
+      debugPrint('Stack trace: $stackTrace');
       rethrow; // Propagate error for proper handling
     } finally {
       _isInitializing = false;

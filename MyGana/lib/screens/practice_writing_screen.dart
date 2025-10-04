@@ -181,6 +181,9 @@ class _PracticeWritingScreenState extends State<PracticeWritingScreen>
   }
 
   void _selectCharacter(JapaneseCharacter character) {
+    developer.log(
+        'Selecting character: "${character.character}" (length: ${character.character.length})');
+    developer.log('Character code units: ${character.character.codeUnits}');
     setState(() {
       _selectedCharacter = character;
       _showAnimation = true;
@@ -287,6 +290,15 @@ class _PracticeWritingScreenState extends State<PracticeWritingScreen>
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Practice Writing'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
       body: _isLoading
           ? Center(
               child: Column(

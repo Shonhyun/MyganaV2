@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:confetti/confetti.dart';
@@ -7,9 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:nihongo_japanese_app/models/japanese_character.dart';
 import 'package:nihongo_japanese_app/models/user_progress.dart';
-import 'package:nihongo_japanese_app/services/character_recognition_service.dart';
+import 'package:nihongo_japanese_app/services/openai_vision_service.dart';
 import 'package:nihongo_japanese_app/services/progress_service.dart';
-import 'package:painter/painter.dart';
+import 'package:nihongo_japanese_app/services/simple_character_recognition_service.dart';
 
 class CharacterDrawingBoard extends StatefulWidget {
   final JapaneseCharacter character;
@@ -56,29 +57,31 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
   bool _showGrid = true;
   bool _showSvgGuideline = true;
 
-  // Drawing settings
+  // Drawing settings - enhanced for better user experience
   final Color _strokeColor = Colors.deepPurple;
-  final double _minBrushWidth = 3.0;
-  final double _maxBrushWidth = 12.0;
+  final double _minBrushWidth = 4.0; // Slightly thicker for better visibility
+  final double _maxBrushWidth = 16.0; // More dynamic range
 
   // Drawing mode
   final bool _isGuidedMode = true;
 
   // Painter controller
-  late PainterController _painterController;
+  // late PainterController _painterController;
 
   // Recognition and feedback
-  final CharacterRecognitionService _recognitionService = CharacterRecognitionService();
   final ProgressService _progressService = ProgressService();
   RecognitionResult? _lastRecognitionResult;
   RecognitionResult? _realTimeResult;
   bool _isRecognizing = false;
   bool _showRecognitionResult = false;
   bool _showRealTimeFeedback = false;
+  bool _showDetailedFeedback = false;
+  String? _lastHandwrittenImageBase64;
+  String? _lastReferenceImageBase64;
   late ConfettiController _confettiController;
 
-  // Real-time recognition timer
-  Timer? _recognitionTimer;
+  // Real-time recognition timer (disabled for manual checking)
+  // Timer? _recognitionTimer;
 
   @override
   void initState() {
@@ -95,7 +98,7 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
     });
 
     // Initialize painter controller
-    _painterController = PainterController();
+    // _painterController = PainterController();
 
     // Initialize confetti controller
     _confettiController = ConfettiController(duration: const Duration(seconds: 2));
@@ -107,9 +110,9 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
   @override
   void dispose() {
     _animationController.dispose();
-    _painterController.dispose();
+    // _painterController.dispose();
     _confettiController.dispose();
-    _recognitionTimer?.cancel();
+    // Timer removed - using manual check only
     super.dispose();
   }
 
@@ -124,22 +127,22 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
       _realTimeResult = null;
 
       // Clear painter
-      _painterController.clear();
+      // _painterController.clear();
     });
 
-    // Cancel any pending recognition
-    _recognitionTimer?.cancel();
+    // No automatic recognition - manual check only
   }
 
-  // Real-time recognition as user draws
+  // Real-time recognition methods disabled - using manual check only
+  /*
   void _triggerRealTimeRecognition() {
     if (!widget.enableRealTimeRecognition || _userStrokes.isEmpty) return;
 
     // Cancel previous timer
-    _recognitionTimer?.cancel();
+    // Timer removed - using manual check only
 
     // Set a longer delay to avoid too frequent recognition and improve performance
-    _recognitionTimer = Timer(const Duration(milliseconds: 800), () async {
+    // Timer assignment removed - using manual check only
       if (_userStrokes.isNotEmpty && mounted) {
         await _performRealTimeRecognition();
       }
@@ -150,7 +153,7 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
     if (_userStrokes.isEmpty) return;
 
     try {
-      final result = await _recognitionService.recognizeCharacter(
+      final result = await CharacterRecognitionService.recognizeCharacter(
         _userStrokes,
         widget.character,
       );
@@ -168,9 +171,40 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
           });
         }
       });
+    }
+  }
+  */
+
+  Future<void> _testApi() async {
+    try {
+      debugPrint('🧪 Testing recognition service...');
+
+      final isWorking = await OpenAIVisionService.testApiKey();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isWorking
+                  ? '✅ Recognition service is working!'
+                  : '❌ Recognition service unavailable!',
+            ),
+            backgroundColor: isWorking ? Colors.green : Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     } catch (e) {
-      // Silently handle errors for real-time recognition
-      print('Real-time recognition error: $e');
+      debugPrint('❌ Service test error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Service test error: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -182,22 +216,24 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
     });
 
     try {
-      final result = await _recognitionService.recognizeCharacter(
+      final resultWithImages = await CharacterRecognitionService.recognizeCharacterWithImages(
         _userStrokes,
         widget.character,
       );
 
       setState(() {
-        _lastRecognitionResult = result;
+        _lastRecognitionResult = resultWithImages.recognitionResult;
+        _lastHandwrittenImageBase64 = resultWithImages.handwrittenImageBase64;
+        _lastReferenceImageBase64 = resultWithImages.referenceImageBase64;
         _showRecognitionResult = true;
         _isRecognizing = false;
       });
 
       // Update progress
-      await _updateProgress(result);
+      await _updateProgress(resultWithImages.recognitionResult);
 
       // Show confetti for correct recognition
-      if (result.isCorrect) {
+      if (resultWithImages.recognitionResult.isCorrect) {
         _confettiController.play();
         // Add success haptic feedback
         HapticFeedback.mediumImpact();
@@ -207,16 +243,9 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
       }
 
       // Notify parent widget
-      widget.onRecognitionComplete?.call(result);
+      widget.onRecognitionComplete?.call(resultWithImages.recognitionResult);
 
-      // Auto-hide result after 3 seconds
-      Future.delayed(const Duration(seconds: 3), () {
-        if (mounted) {
-          setState(() {
-            _showRecognitionResult = false;
-          });
-        }
-      });
+      // Keep results visible permanently - no auto-hide
     } catch (e) {
       setState(() {
         _isRecognizing = false;
@@ -240,16 +269,16 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
 
       if (characterProgress != null) {
         // Update mastery level based on accuracy
-        final accuracyScore = result.accuracyScore / 100.0;
+        final accuracyScore = (result.accuracyScore ?? 0.0) / 100.0;
         characterProgress.updateMastery(accuracyScore);
 
         // Add stroke evaluation
         characterProgress.addEvaluation(StrokeEvaluation(
           strokeCountScore: result.isCorrect ? 100.0 : 50.0,
           strokeOrderScore: result.isCorrect ? 100.0 : 50.0,
-          positionScore: result.accuracyScore,
-          directionScore: result.accuracyScore,
-          overallScore: result.accuracyScore,
+          positionScore: result.accuracyScore ?? 0.0,
+          directionScore: result.accuracyScore ?? 0.0,
+          overallScore: result.accuracyScore ?? 0.0,
           evaluatedAt: DateTime.now(),
         ));
       } else {
@@ -258,7 +287,7 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
           character: widget.character.character,
           characterType: widget.character.type,
         );
-        newProgress.updateMastery(result.accuracyScore / 100.0);
+        newProgress.updateMastery((result.accuracyScore ?? 0.0) / 100.0);
         _progressService.getUserProgress().characterProgress[widget.character.character] =
             newProgress;
       }
@@ -266,7 +295,7 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
       // Save progress
       await _progressService.saveProgress();
     } catch (e) {
-      print('Error updating progress: $e');
+      debugPrint('Error updating progress: $e');
     }
   }
 
@@ -342,8 +371,7 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
                 _userStrokes.add(List.from(_currentStroke));
                 _currentStroke = [];
 
-                // Trigger real-time recognition after each stroke
-                _triggerRealTimeRecognition();
+                // No automatic recognition - user will manually check
               }
             });
           },
@@ -459,6 +487,13 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
                       tooltip: 'Check Character',
                       color: _userStrokes.isNotEmpty ? Colors.green : null,
                     ),
+                    const SizedBox(width: 4),
+                    _buildCompactToolButton(
+                      icon: Icons.api,
+                      onPressed: _testApi,
+                      tooltip: 'Test Recognition Service',
+                      color: Colors.blue,
+                    ),
                   ],
                 ],
               ),
@@ -539,7 +574,7 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'AI Confidence: ${(result.confidence * 100).toStringAsFixed(1)}%',
+                  'Confidence: ${((result.confidence ?? 0.0) * 100).toStringAsFixed(1)}%',
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -558,190 +593,356 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
     final result = _lastRecognitionResult!;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    return Positioned.fill(
+
+    // Display results inline at the top of the drawing board
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
       child: Container(
-        color: Colors.black.withOpacity(0.3),
-        child: Center(
-          child: Container(
-            margin: const EdgeInsets.all(20),
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
+        margin: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: colorScheme.surface.withOpacity(0.95),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: result.isCorrect ? Colors.green : Colors.orange,
+            width: 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Main result row - responsive layout
+            Row(
               children: [
-                // Result icon
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: result.isCorrect
-                        ? Colors.green.withOpacity(0.1)
-                        : Colors.orange.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    result.isCorrect ? Icons.check_circle : Icons.info,
-                    size: 40,
-                    color: result.isCorrect ? Colors.green : Colors.orange,
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Result text
-                Text(
-                  result.isCorrect ? 'Correct!' : 'Try Again',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: result.isCorrect ? Colors.green : Colors.orange,
-                  ),
-                ),
-                const SizedBox(height: 8),
-
-                // Target character only
-                Center(
-                  child: _buildCharacterDisplay(
-                    'Target:',
-                    widget.character.character,
-                    colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // ML confidence display
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.blue.withOpacity(0.3), width: 1),
-                  ),
-                  child: Column(
+                // Left side - Result status and character (flexible)
+                Expanded(
+                  flex: 2,
+                  child: Row(
                     children: [
-                      Text(
-                        ' Confidence',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue[800],
-                        ),
+                      // Result icon
+                      Icon(
+                        result.isCorrect ? Icons.check_circle : Icons.info,
+                        size: 20,
+                        color: result.isCorrect ? Colors.green : Colors.orange,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '${(result.confidence * 100).toStringAsFixed(1)}%',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue[700],
+                      const SizedBox(width: 6),
+
+                      // Result text and character
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              result.isCorrect ? 'Correct!' : 'Try Again',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: result.isCorrect ? Colors.green : Colors.orange,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              'Target: ${widget.character.character}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: colorScheme.onSurface.withOpacity(0.7),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 8),
 
-                // Accuracy score
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Accuracy: ${result.accuracyScore.toStringAsFixed(1)}%',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: colorScheme.primary,
-                    ),
+                const SizedBox(width: 8),
+
+                // Center - Scores (flexible)
+                Expanded(
+                  flex: 3,
+                  child: Row(
+                    children: [
+                      // Confidence score
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                          ),
+                          child: Text(
+                            'Conf: ${((result.confidence ?? 0.0) * 100).toStringAsFixed(0)}%',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.blue[700],
+                            ),
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+
+                      // Accuracy score
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: colorScheme.primary.withOpacity(0.3)),
+                          ),
+                          child: Text(
+                            'Acc: ${(result.accuracyScore ?? 0.0).toStringAsFixed(0)}%',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: colorScheme.primary,
+                            ),
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
 
-                // Feedback message
-                Text(
-                  result.feedback,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: colorScheme.onSurface.withOpacity(0.8),
-                  ),
-                ),
-                const SizedBox(height: 20),
+                const SizedBox(width: 8),
 
-                // Action buttons
+                // Right side - Action buttons (fixed size)
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextButton(
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _showDetailedFeedback = !_showDetailedFeedback;
+                        });
+                      },
+                      icon: Icon(_showDetailedFeedback ? Icons.expand_less : Icons.expand_more),
+                      tooltip: 'Toggle Details',
+                      iconSize: 18,
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    ),
+                    IconButton(
                       onPressed: () {
                         setState(() {
                           _showRecognitionResult = false;
                         });
                       },
-                      child: const Text('Continue'),
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Hide Results',
+                      iconSize: 18,
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                     ),
-                    const SizedBox(width: 16),
-                    ElevatedButton(
+                    IconButton(
                       onPressed: () {
                         _clearDrawing();
                         setState(() {
                           _showRecognitionResult = false;
                         });
                       },
-                      child: const Text('Try Again'),
+                      icon: const Icon(Icons.refresh),
+                      tooltip: 'Try Again',
+                      iconSize: 18,
+                      padding: const EdgeInsets.all(4),
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                     ),
                   ],
                 ),
               ],
             ),
-          ),
+
+            // Detailed feedback section (expandable)
+            if (_showDetailedFeedback) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(maxHeight: 400), // Limit height
+                decoration: BoxDecoration(
+                  color: colorScheme.surface.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: colorScheme.outline.withOpacity(0.3)),
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Uploaded images section
+                      if (_lastHandwrittenImageBase64 != null ||
+                          _lastReferenceImageBase64 != null) ...[
+                        Text(
+                          '📤 Images Being Analyzed:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            // Handwritten image
+                            if (_lastHandwrittenImageBase64 != null) ...[
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      'Your Drawing',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: colorScheme.onSurface.withOpacity(0.7),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      height: 80,
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: Colors.green.withOpacity(0.5)),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(7),
+                                        child: Image.memory(
+                                          base64Decode(_lastHandwrittenImageBase64!),
+                                          fit: BoxFit.contain,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            if (_lastHandwrittenImageBase64 != null &&
+                                _lastReferenceImageBase64 != null)
+                              const SizedBox(width: 8),
+                            // Reference image
+                            if (_lastReferenceImageBase64 != null) ...[
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      'Reference',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: colorScheme.onSurface.withOpacity(0.7),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      height: 80,
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: Colors.blue.withOpacity(0.5)),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(7),
+                                        child: Image.memory(
+                                          base64Decode(_lastReferenceImageBase64!),
+                                          fit: BoxFit.contain,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+
+                      // Detailed scores breakdown
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildScoreCard('Shape', result.shapeScore, Colors.purple),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildScoreCard('Stroke', result.strokeScore, Colors.orange),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child:
+                                _buildScoreCard('Proportion', result.proportionScore, Colors.teal),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildScoreCard('Quality', result.qualityScore, Colors.indigo),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Main feedback
+                      Text(
+                        result.feedback,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colorScheme.onSurface.withOpacity(0.8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildCharacterDisplay(String label, String character, Color color) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color, width: 2),
-          ),
-          child: Center(
-            child: Text(
-              character,
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
+  Widget _buildScoreCard(String label, double? score, Color color) {
+    final safeScore = score ?? 0.0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: color,
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 2),
+          Text(
+            '${safeScore.toStringAsFixed(0)}%',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -762,7 +963,7 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
                 const CircularProgressIndicator(),
                 const SizedBox(height: 16),
                 Text(
-                  'Analyzing your character...',
+                  'Checking your character...',
                   style: TextStyle(
                     fontSize: 16,
                     color: Theme.of(context).colorScheme.onSurface,
@@ -1002,11 +1203,11 @@ class BrushDrawingPainter extends CustomPainter {
       if (i > 1) {
         final prevPoint = stroke[i - 2];
         final distance = (p0 - prevPoint).distance;
-        speed = math.min(math.max(distance * 10, 0.5), 2.0);
+        speed = math.min(math.max(distance * 15, 0.3), 3.0); // More responsive
       }
 
       // Calculate brush width - thicker when slower, thinner when faster
-      final brushWidth = maxStrokeWidth - ((maxStrokeWidth - minStrokeWidth) * (speed - 0.5));
+      final brushWidth = maxStrokeWidth - ((maxStrokeWidth - minStrokeWidth) * (speed - 0.3) / 2.7);
 
       // Create a path for this segment
       final path = Path();
@@ -1043,14 +1244,15 @@ class BrushDrawingPainter extends CustomPainter {
         );
       }
 
-      // Create brush-like paint
+      // Create brush-like paint with enhanced visual feedback
       final paint = Paint()
         ..color = strokeColor
         ..strokeWidth = brushWidth
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round
         ..style = PaintingStyle.stroke
-        ..isAntiAlias = true;
+        ..isAntiAlias = true
+        ..filterQuality = FilterQuality.high; // Better quality rendering
 
       // Draw the path
       canvas.drawPath(path, paint);

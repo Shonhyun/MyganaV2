@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'category_screen.dart';
 
 class LessonsScreen extends StatelessWidget {
@@ -33,15 +34,15 @@ class LessonsScreen extends StatelessWidget {
                   Text(
                     'Welcome to Japanese Learning!',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Choose your level to start learning',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Colors.grey[600],
-                    ),
+                          color: Colors.grey[600],
+                        ),
                   ),
                 ],
               ),
@@ -119,8 +120,8 @@ class LessonsScreen extends StatelessWidget {
                               Text(
                                 level,
                                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                      fontWeight: FontWeight.bold,
+                                    ),
                               ),
                               const SizedBox(height: 4),
                               Text(
