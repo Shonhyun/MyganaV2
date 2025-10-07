@@ -1,6 +1,4 @@
 import 'dart:io';
-import 'dart:math' as math;
-import 'dart:math';
 import 'dart:ui';
 
 import 'package:firebase_database/firebase_database.dart';
@@ -222,44 +220,38 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  _buildLogoIcon(context),
-                  const SizedBox(width: 12),
-                  AnimatedBuilder(
-                    animation: _animationController,
-                    builder: (context, child) {
-                      final scaleAnimation = Tween<double>(
-                        begin: 0.95,
-                        end: 1.0,
-                      ).animate(CurvedAnimation(
-                        parent: _animationController,
-                        curve: const Interval(0.4, 1.0, curve: Curves.easeInOut),
-                      ));
+              AnimatedBuilder(
+                animation: _animationController,
+                builder: (context, child) {
+                  final scaleAnimation = Tween<double>(
+                    begin: 0.95,
+                    end: 1.0,
+                  ).animate(CurvedAnimation(
+                    parent: _animationController,
+                    curve: const Interval(0.4, 1.0, curve: Curves.easeInOut),
+                  ));
 
-                      return Transform.scale(
-                        scale: scaleAnimation.value,
-                        child: Text(
-                          'MyGana',
-                          style: TextStyle(
-                            fontFamily: 'TheLastShuriken',
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                            letterSpacing: 1.2,
-                            shadows: [
-                              Shadow(
-                                blurRadius: 4.0,
-                                color: Colors.black.withOpacity(0.3),
-                                offset: const Offset(2, 2),
-                              ),
-                            ],
+                  return Transform.scale(
+                    scale: scaleAnimation.value,
+                    child: Text(
+                      'MyGana',
+                      style: TextStyle(
+                        fontFamily: 'TheLastShuriken',
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: 1.5,
+                        shadows: [
+                          Shadow(
+                            blurRadius: 6.0,
+                            color: Colors.black.withOpacity(0.4),
+                            offset: const Offset(2, 2),
                           ),
-                        ),
-                      );
-                    },
-                  ),
-                ],
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
               Row(
                 children: [
@@ -342,39 +334,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildLogoIcon(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animationController,
-      builder: (context, child) {
-        final value = _animationController.value;
-        return Transform.rotate(
-          angle: sin(value * 2 * math.pi) * 0.05,
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: ClipOval(
-              child: Image.asset(
-                'assets/images/myganaa_icon.png',
-                width: 44,
-                height: 44,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   Widget _buildProfileButton(BuildContext context) {
     return FutureBuilder<String?>(
