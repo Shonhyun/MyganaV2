@@ -8,6 +8,7 @@ class StoryBeat {
   final CharacterPosition characterPosition;
   final Question? question;
   final String harukiExpression;
+  final String? soundFile; // Optional sound file for character voice
 
   StoryBeat({
     required this.text,
@@ -17,6 +18,7 @@ class StoryBeat {
     this.characterPosition = CharacterPosition.center,
     this.question,
     required this.harukiExpression,
+    this.soundFile, // Optional sound file parameter
   });
 }
 
@@ -38,10 +40,11 @@ class Question {
 final List<StoryBeat> easyStoryBeats = [
   // Introduction
   StoryBeat(
-    text:
+    text:                                       
         'Haruki is a high school student who suddenly gets transported to a mysterious academy where every person he meets tests his Kanji skills. If he passes all 10 trials, he can return home—stronger and wiser.',
     background: 'Gate (Intro).png',
     harukiExpression: 'Haruki (Surprised).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 1: Sensei Aki
@@ -50,6 +53,7 @@ final List<StoryBeat> easyStoryBeats = [
         'Haruki wakes up in a classroom bathed in golden light. A kind-looking woman greets him.',
     background: 'Classroom (Inter1).png',
     harukiExpression: 'Haruki (Surprised).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Aki-sensei',
@@ -58,6 +62,7 @@ final List<StoryBeat> easyStoryBeats = [
     character: 'Aki sensei (Delighted).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text: '',
@@ -65,12 +70,13 @@ final List<StoryBeat> easyStoryBeats = [
     character: 'Aki sensei (Normal).png',
     characterPosition: CharacterPosition.center,
     question: Question(
-      text: 'What does this Kanji mean: 学 (がく)?',
+      text: 'What does this Kanji mean: 学 (がく / gaku)?',
       options: ['A. Tree', 'B. Study', 'C. Moon', 'D. Wind'],
       correctAnswer: 'B. Study',
       customHint: 'This Kanji is related to education and learning. Think about what you do in school.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 2: Yuto
@@ -78,6 +84,7 @@ final List<StoryBeat> easyStoryBeats = [
     text: 'Haruki meets a shy first-year named Yuto in the hallway.',
     background: 'Hallway (Inter2).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Yuto.wav',
   ),
   StoryBeat(
     speaker: 'Yuto',
@@ -87,6 +94,7 @@ final List<StoryBeat> easyStoryBeats = [
     character: 'Yuto (Sad).png',
     characterPosition: CharacterPosition.right,
     harukiExpression: 'Haruki (Sad).png',
+    soundFile: 'assets/sounds/Yuto.wav',
   ),
   StoryBeat(
     text: '',
@@ -95,11 +103,12 @@ final List<StoryBeat> easyStoryBeats = [
     characterPosition: CharacterPosition.right,
     question: Question(
       text: 'Which word means "student"?',
-      options: ['A. 先生', 'B. 学生', 'C. 水生', 'D. 車生'],
-      correctAnswer: 'B. 学生',
+      options: ['A. 先生/sensei', 'B. 学生/gakusei', 'C. 水生/suisei', 'D. 車生/shasei'],
+      correctAnswer: 'B. 学生/gakusei',
       customHint: 'This word combines the Kanji for "study" (学) with "life" (生). Think about someone who studies.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 3: Hana
@@ -107,6 +116,7 @@ final List<StoryBeat> easyStoryBeats = [
     text: 'In the library, Haruki meets Hana surrounded by textbooks.',
     background: 'Library (Inter3).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Hana',
@@ -115,7 +125,8 @@ final List<StoryBeat> easyStoryBeats = [
     background: 'Library (Inter3).png',
     character: 'Hana (Delighted).png',
     characterPosition: CharacterPosition.left,
-    harukiExpression: 'Haruki (Smile).png',
+    harukiExpression: 'Haruki (Smile1).png',
+    soundFile: 'assets/sounds/Hana.wav',
   ),
   StoryBeat(
     text: '',
@@ -124,11 +135,12 @@ final List<StoryBeat> easyStoryBeats = [
     characterPosition: CharacterPosition.left,
     question: Question(
       text: 'Which word means "school"?',
-      options: ['A. 学校', 'B. 教室', 'C. 大学', 'D. 図書館'],
-      correctAnswer: 'A. 学校',
+      options: ['A. 学校/gakkō', 'B. 教室/kyōshitsu', 'C. 大学/daigaku', 'D. 図書館/toshokan'],
+      correctAnswer: 'A. 学校/gakkō',
       customHint: 'This word combines "study" (学) with "building" (校). It\'s where students go to learn.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Hana.wav',
   ),
 
   // Interaction 4: Kenta
@@ -136,6 +148,7 @@ final List<StoryBeat> easyStoryBeats = [
     text: 'Kenta jogs past Haruki on the school field.',
     background: 'Athletics Track (Inter4).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Kenta',
@@ -145,6 +158,7 @@ final List<StoryBeat> easyStoryBeats = [
     character: 'Kenta (Smile).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Laugh).png',
+    soundFile: 'assets/sounds/Kenta.wav',
   ),
   StoryBeat(
     text: '',
@@ -153,11 +167,12 @@ final List<StoryBeat> easyStoryBeats = [
     characterPosition: CharacterPosition.center,
     question: Question(
       text: 'Choose the correct Kanji for "mountain":',
-      options: ['A. 山', 'B. 川', 'C. 木', 'D. 田'],
-      correctAnswer: 'A. 山',
+      options: ['A. 山/yama', 'B. 川/kawa', 'C. 木/ki', 'D. 田/ta'],
+      correctAnswer: 'A. 山/yama',
       customHint: 'This Kanji looks like three peaks of a mountain. It\'s one of the simplest and most recognizable Kanji.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Kenta.wav',
   ),
 
   // Interaction 5: Emi
@@ -165,6 +180,7 @@ final List<StoryBeat> easyStoryBeats = [
     text: 'Haruki sees Emi adjusting a sundial in the courtyard.',
     background: 'Courtyard (Inter5).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Emi',
@@ -173,6 +189,7 @@ final List<StoryBeat> easyStoryBeats = [
     character: 'Emi (Smug).png',
     characterPosition: CharacterPosition.right,
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Emi(Sage).wav',
   ),
   StoryBeat(
     text: '',
@@ -181,11 +198,12 @@ final List<StoryBeat> easyStoryBeats = [
     characterPosition: CharacterPosition.right,
     question: Question(
       text: 'Which Kanji means "time"?',
-      options: ['A. 日', 'B. 年', 'C. 時', 'D. 分'],
-      correctAnswer: 'C. 時',
+      options: ['A. 日/hi', 'B. 年/toshi', 'C. 時/toki', 'D. 分/fun'],
+      correctAnswer: 'C. 時/toki',
       customHint: 'This Kanji combines "sun" (日) with "temple" (寺), representing the passage of time measured by the sun.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 6: Sota
@@ -193,6 +211,7 @@ final List<StoryBeat> easyStoryBeats = [
     text: 'Sota breathes fire on stage during a play rehearsal.',
     background: 'Stage (Inter6).png',
     harukiExpression: 'Haruki (Surprised).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Sota',
@@ -201,6 +220,7 @@ final List<StoryBeat> easyStoryBeats = [
     character: 'Sota (Laugh).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Laugh).png',
+    soundFile: 'assets/sounds/Sota(Onyx).wav',
   ),
   StoryBeat(
     text: '',
@@ -209,11 +229,12 @@ final List<StoryBeat> easyStoryBeats = [
     characterPosition: CharacterPosition.center,
     question: Question(
       text: 'Which one means "fire"?',
-      options: ['A. 水', 'B. 火', 'C. 木', 'D. 石'],
-      correctAnswer: 'B. 火',
+      options: ['A. 水/mizu', 'B. 火/hi', 'C. 木/ki', 'D. 石/ishi'],
+      correctAnswer: 'B. 火/hi',
       customHint: 'This Kanji represents flames dancing upward. It\'s one of the five basic elements.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Sota(Onyx).wav',
   ),
 
   // Interaction 7: Nao
@@ -221,6 +242,7 @@ final List<StoryBeat> easyStoryBeats = [
     text: 'Nao dives into the pool with a splash.',
     background: 'Pool (Inter7).png',
     harukiExpression: 'Haruki (Surprised).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Nao',
@@ -229,7 +251,8 @@ final List<StoryBeat> easyStoryBeats = [
     background: 'Pool (Inter7).png',
     character: 'Nao (Smile).png',
     characterPosition: CharacterPosition.left,
-    harukiExpression: 'Haruki (Smile).png',
+    harukiExpression: 'Haruki (Smile1).png',
+    soundFile: 'assets/sounds/Nao(Shimmer).wav',
   ),
   StoryBeat(
     text: '',
@@ -238,11 +261,12 @@ final List<StoryBeat> easyStoryBeats = [
     characterPosition: CharacterPosition.left,
     question: Question(
       text: 'What is the Kanji for "water"?',
-      options: ['A. 火', 'B. 土', 'C. 水', 'D. 風'],
-      correctAnswer: 'C. 水',
+      options: ['A. 火/hi', 'B. 土/do', 'C. 水/mizu', 'D. 風/kaze'],
+      correctAnswer: 'C. 水/mizu',
       customHint: 'This Kanji represents flowing water with streams. It\'s another of the five basic elements.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Nao(Shimmer).wav',
   ),
 
   // Interaction 8: Toshi
@@ -250,14 +274,16 @@ final List<StoryBeat> easyStoryBeats = [
     text: 'In the calligraphy room, Toshi shows Haruki a half-written scroll.',
     background: 'Arts Room (Inter8).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Toshi',
-    text: 'Which word means "principal" of a school?',
+    text: 'Since we’re in the arts room, do you know what “calligraphy” is called in Japanese?',
     background: 'Arts Room (Inter8).png',
-    character: 'Toshi (Delighted).png',
+    character: 'Toshi (Smirk).png',
     characterPosition: CharacterPosition.right,
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Toshi(Ashe).wav',
   ),
   StoryBeat(
     text: '',
@@ -265,12 +291,13 @@ final List<StoryBeat> easyStoryBeats = [
     character: 'Toshi (Normal).png',
     characterPosition: CharacterPosition.right,
     question: Question(
-      text: 'Which means "school principal"?',
-      options: ['A. 学生', 'B. 校長', 'C. 先生', 'D. 学校'],
-      correctAnswer: 'B. 校長',
-      customHint: 'This word combines "school" (校) with "head/chief" (長). The principal is the head of the school.',
+      text: 'What is the Japanese word for “calligraphy”?',
+      options: ['A. 書道/shodō', 'B. 絵/e', 'C. 音楽/ongku', 'D. 文字/moji'],
+      correctAnswer: 'A. 書道/shodō',
+      customHint: '書 (sho) means “to write” and 道 (dō) means “way.” So 書道 means “the way of writing” — Japanese calligraphy.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 9: Mei
@@ -278,6 +305,7 @@ final List<StoryBeat> easyStoryBeats = [
     text: 'Mei greets Haruki with a bright smile in the study hall.',
     background: 'Student Council Room (Inter9).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Mei',
@@ -286,7 +314,8 @@ final List<StoryBeat> easyStoryBeats = [
     background: 'Student Council Room (Inter9).png',
     character: 'Mei (Smile2).png',
     characterPosition: CharacterPosition.center,
-    harukiExpression: 'Haruki (Smile).png',
+    harukiExpression: 'Haruki (Smile1).png',
+    soundFile: 'assets/sounds/Mei(Nova).wav',
   ),
   StoryBeat(
     text: '',
@@ -295,11 +324,12 @@ final List<StoryBeat> easyStoryBeats = [
     characterPosition: CharacterPosition.center,
     question: Question(
       text: 'What is the correct phrase for "university student"?',
-      options: ['A. 小学生', 'B. 大学生', 'C. 学生大', 'D. 高校生'],
-      correctAnswer: 'B. 大学生',
+      options: ['A. 小学生/shōgakusei', 'B. 大学生/daigakusei', 'C. 学生大/gakuseidai', 'D. 高校生/kōkōsei'],
+      correctAnswer: 'B. 大学生/daigakusei',
       customHint: 'This combines "big" (大) with "student" (学生). University is considered "big school" in Japanese.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Mei(Nova).wav',
   ),
 
   // Interaction 10: Professor Hoshino
@@ -307,6 +337,7 @@ final List<StoryBeat> easyStoryBeats = [
     text: 'Haruki enters the final chamber, where an older professor awaits.',
     background: 'Principal\'s Office (Inter10).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Professor Hoshino',
@@ -316,6 +347,7 @@ final List<StoryBeat> easyStoryBeats = [
     character: 'Prof Hoshino (Normal).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Prof Hoshino(Echo).wav',
   ),
   StoryBeat(
     text: '',
@@ -324,11 +356,12 @@ final List<StoryBeat> easyStoryBeats = [
     characterPosition: CharacterPosition.center,
     question: Question(
       text: 'Which of the following means "Japanese language"?',
-      options: ['A. 中国語', 'B. 英語', 'C. 日本語', 'D. 語日本'],
-      correctAnswer: 'C. 日本語',
+      options: ['A. 中国語/Chūgokugo', 'B. 英語/Eigo', 'C. 日本語/Nihongo', 'D. 語日本/Go Nihon'],
+      correctAnswer: 'C. 日本語/Nihongo',
       customHint: 'This combines "Japan" (日本) with "language" (語). It\'s the language spoken in Japan.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Ending
@@ -337,6 +370,7 @@ final List<StoryBeat> easyStoryBeats = [
         'As Haruki answers the final question, the air around him shimmers with golden light. Professor Hoshino smiles and slowly closes the ancient book he had been holding.',
     background: 'Principal\'s Office (Inter10).png',
     harukiExpression: 'Haruki (Smile1).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Professor Hoshino',
@@ -352,6 +386,7 @@ final List<StoryBeat> easyStoryBeats = [
         'The ground beneath Haruki glows. One by one, all the people he met—Aki-sensei, Yuto, Hana, Kenta, Emi, Sota, Nao, Toshi, Mei—appear around him in a circle. They bow respectfully.',
     background: 'Principal\'s Office (Inter10).png',
     harukiExpression: 'Haruki (Surprised).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Aki-sensei',
@@ -361,6 +396,7 @@ final List<StoryBeat> easyStoryBeats = [
     character: 'Aki sensei (Smile).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Mei',
@@ -369,18 +405,21 @@ final List<StoryBeat> easyStoryBeats = [
     character: 'Mei (Delighted).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Sad).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text:
         'The characters begin to fade into glowing symbols, swirling around Haruki as the notebook reappears in his hands. A soft wind blows, carrying the sound of distant school bells.',
     background: 'Principal\'s Office (Inter10).png',
     harukiExpression: 'Haruki (Sad).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text:
         'Haruki opens his eyes…\n\nHe\'s back in the real-world school library, sitting exactly where he first found the notebook. The mysterious title on the cover still reads "The Path of Characters," but now—there\'s a new inscription on the last page:\n\n"Those who seek meaning will always find it—in words, in people, in themselves."',
     background: 'Library (Inter3).png',
     harukiExpression: 'Haruki (Surprised).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text:
@@ -393,6 +432,7 @@ final List<StoryBeat> easyStoryBeats = [
         'Congratulations! You\'ve completed your Kanji Journey with Haruki.\nBut remember—this is only the beginning of your own adventure in Japanese learning!',
     background: 'Gate (Intro).png',
     harukiExpression: 'Haruki (Smile1).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 ];
 
@@ -404,6 +444,7 @@ final List<StoryBeat> normalStoryBeats = [
         'Haruki is a high school student who suddenly gets transported to a mysterious academy where every person he meets tests his Kanji skills. If he passes all 10 trials, he can return home—stronger and wiser.',
     background: 'Gate (Intro).png',
     harukiExpression: 'Haruki (Surprised).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 1: Sensei Aki
@@ -412,6 +453,7 @@ final List<StoryBeat> normalStoryBeats = [
         'Haruki wakes up in a classroom bathed in golden light. A kind-looking woman greets him.',
     background: 'Classroom (Inter1).png',
     harukiExpression: 'Haruki (Surprised).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Aki-sensei',
@@ -420,6 +462,7 @@ final List<StoryBeat> normalStoryBeats = [
     character: 'Aki sensei (Delighted).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text: '',
@@ -433,6 +476,7 @@ final List<StoryBeat> normalStoryBeats = [
       customHint: 'This Kanji represents the concept of learning and education. It\'s fundamental to understanding Japanese education.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 2: Yuto
@@ -440,6 +484,7 @@ final List<StoryBeat> normalStoryBeats = [
     text: 'Haruki meets a shy first-year named Yuto in the hallway.',
     background: 'Hallway (Inter2).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Yuto',
@@ -449,6 +494,7 @@ final List<StoryBeat> normalStoryBeats = [
     character: 'Yuto (Sad).png',
     characterPosition: CharacterPosition.right,
     harukiExpression: 'Haruki (Sad).png',
+    soundFile: 'assets/sounds/Yuto.wav',
   ),
   StoryBeat(
     text: '',
@@ -462,6 +508,7 @@ final List<StoryBeat> normalStoryBeats = [
       customHint: 'The Kanji for "study" (学) combined with "life" (生) creates the word for student. Think about what students do.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 3: Hana
@@ -469,15 +516,17 @@ final List<StoryBeat> normalStoryBeats = [
     text: 'In the library, Haruki meets Hana surrounded by textbooks.',
     background: 'Library (Inter3).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Hana',
     text:
-        'I\'m writing a journal entry. Can you help complete this sentence: わたしは ___校に行きます。 ("I go to school.")',
+        'I\'m writing a journal entry. Can you help me identify the word for "school"?',
     background: 'Library (Inter3).png',
     character: 'Hana (Delighted).png',
     characterPosition: CharacterPosition.left,
-    harukiExpression: 'Haruki (Smile).png',
+    harukiExpression: 'Haruki (Smile1).png',
+    soundFile: 'assets/sounds/Hana.wav',
   ),
   StoryBeat(
     text: '',
@@ -485,12 +534,13 @@ final List<StoryBeat> normalStoryBeats = [
     character: 'Hana (Normal).png',
     characterPosition: CharacterPosition.left,
     question: Question(
-      text: 'Which word best completes the sentence?',
-      options: ['A. 学', 'B. 校', 'C. 学校', 'D. 生'],
-      correctAnswer: 'C. 学校',
-      customHint: 'The complete word "school" (学校) combines "study" (学) and "building" (校). This is the standard term for school.',
+      text: 'Which word means "school"?',
+      options: ['A. 学校', 'B. 教室', 'C. 大学', 'D. 図書館'],
+      correctAnswer: 'A. 学校',
+      customHint: 'This word combines "study" (学) with "building" (校). It\'s where students go to learn.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Hana.wav',
   ),
 
   // Interaction 4: Kenta
@@ -498,6 +548,7 @@ final List<StoryBeat> normalStoryBeats = [
     text: 'Kenta jogs past Haruki on the school field.',
     background: 'Athletics Track (Inter4).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Kenta',
@@ -507,6 +558,7 @@ final List<StoryBeat> normalStoryBeats = [
     character: 'Kenta (Smile).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Laugh).png',
+    soundFile: 'assets/sounds/Kenta.wav',
   ),
   StoryBeat(
     text: '',
@@ -520,6 +572,7 @@ final List<StoryBeat> normalStoryBeats = [
       customHint: 'This Kanji represents three mountain peaks. It\'s one of the most basic and recognizable Kanji characters.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 5: Emi
@@ -527,6 +580,7 @@ final List<StoryBeat> normalStoryBeats = [
     text: 'Haruki sees Emi adjusting a sundial in the courtyard.',
     background: 'Courtyard (Inter5).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Emi',
@@ -535,6 +589,7 @@ final List<StoryBeat> normalStoryBeats = [
     character: 'Emi (Smug).png',
     characterPosition: CharacterPosition.right,
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Emi(Sage).wav',
   ),
   StoryBeat(
     text: '',
@@ -548,6 +603,7 @@ final List<StoryBeat> normalStoryBeats = [
       customHint: 'This Kanji combines "sun" (日) with "temple" (寺), representing time as measured by the sun\'s movement.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 6: Sota
@@ -555,6 +611,7 @@ final List<StoryBeat> normalStoryBeats = [
     text: 'Sota breathes fire on stage during a play rehearsal.',
     background: 'Stage (Inter6).png',
     harukiExpression: 'Haruki (Surprised).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Sota',
@@ -563,6 +620,7 @@ final List<StoryBeat> normalStoryBeats = [
     character: 'Sota (Laugh).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Laugh).png',
+    soundFile: 'assets/sounds/Sota(Onyx).wav',
   ),
   StoryBeat(
     text: '',
@@ -576,6 +634,7 @@ final List<StoryBeat> normalStoryBeats = [
       customHint: 'This Kanji represents flames rising upward. It\'s one of the five basic elements in Japanese philosophy.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 7: Nao
@@ -583,6 +642,7 @@ final List<StoryBeat> normalStoryBeats = [
     text: 'Nao dives into the pool with a splash.',
     background: 'Pool (Inter7).png',
     harukiExpression: 'Haruki (Surprised).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Nao',
@@ -591,7 +651,8 @@ final List<StoryBeat> normalStoryBeats = [
     background: 'Pool (Inter7).png',
     character: 'Nao (Smile).png',
     characterPosition: CharacterPosition.left,
-    harukiExpression: 'Haruki (Smile).png',
+    harukiExpression: 'Haruki (Smile1).png',
+    soundFile: 'assets/sounds/Nao(Shimmer).wav',
   ),
   StoryBeat(
     text: '',
@@ -605,6 +666,7 @@ final List<StoryBeat> normalStoryBeats = [
       customHint: 'This Kanji represents flowing water with streams. It\'s another of the five basic elements.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 8: Toshi
@@ -612,14 +674,16 @@ final List<StoryBeat> normalStoryBeats = [
     text: 'In the calligraphy room, Toshi shows Haruki a half-written scroll.',
     background: 'Arts Room (Inter8).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Toshi',
-    text: 'I\'m writing "school principal". Which combination should I use?',
+    text: 'Since we’re in the arts room, do you know what “calligraphy” is called in Japanese?',
     background: 'Arts Room (Inter8).png',
-    character: 'Toshi (Delighted).png',
+    character: 'Toshi (Smirk).png',
     characterPosition: CharacterPosition.right,
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Toshi(Ashe).wav',
   ),
   StoryBeat(
     text: '',
@@ -627,12 +691,13 @@ final List<StoryBeat> normalStoryBeats = [
     character: 'Toshi (Normal).png',
     characterPosition: CharacterPosition.right,
     question: Question(
-      text: 'Which Kanji pair means "school principal"?',
-      options: ['A. 学生', 'B. 校長', 'C. 大学', 'D. 学本'],
-      correctAnswer: 'B. 校長',
-      customHint: 'This combines "school" (校) with "head/chief" (長). The principal is the head administrator of the school.',
+      text: 'What is the Japanese word for “calligraphy”?',
+      options: ['A. 書道', 'B. 絵', 'C. 音楽', 'D. 文字'],
+      correctAnswer: 'A. 書道',
+      customHint: '書 (sho) means “to write” and 道 (dō) means “way.” So 書道 means “the way of writing” — Japanese calligraphy.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 9: Mei
@@ -640,6 +705,7 @@ final List<StoryBeat> normalStoryBeats = [
     text: 'Mei greets Haruki with a bright smile in the study hall.',
     background: 'Student Council Room (Inter9).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Mei',
@@ -648,7 +714,8 @@ final List<StoryBeat> normalStoryBeats = [
     background: 'Student Council Room (Inter9).png',
     character: 'Mei (Smile2).png',
     characterPosition: CharacterPosition.center,
-    harukiExpression: 'Haruki (Smile).png',
+    harukiExpression: 'Haruki (Smile1).png',
+    soundFile: 'assets/sounds/Mei(Nova).wav',
   ),
   StoryBeat(
     text: '',
@@ -662,6 +729,7 @@ final List<StoryBeat> normalStoryBeats = [
       customHint: 'This combines "big" (大) with "student" (学生). University is considered "big school" compared to high school.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 10: Professor Hoshino
@@ -669,6 +737,7 @@ final List<StoryBeat> normalStoryBeats = [
     text: 'Haruki enters the final chamber, where an older professor awaits.',
     background: 'Principal\'s Office (Inter10).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Professor Hoshino',
@@ -678,6 +747,7 @@ final List<StoryBeat> normalStoryBeats = [
     character: 'Prof Hoshino (Normal).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Prof Hoshino(Echo).wav',
   ),
   StoryBeat(
     text: '',
@@ -691,6 +761,7 @@ final List<StoryBeat> normalStoryBeats = [
       customHint: 'This combines "Japan" (日本) with "language" (語). It\'s the official term for the Japanese language.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Ending (same as easy mode)
@@ -699,6 +770,7 @@ final List<StoryBeat> normalStoryBeats = [
         'As Haruki answers the final question, the air around him shimmers with golden light. Professor Hoshino smiles and slowly closes the ancient book he had been holding.',
     background: 'Principal\'s Office (Inter10).png',
     harukiExpression: 'Haruki (Smile1).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Professor Hoshino',
@@ -714,6 +786,7 @@ final List<StoryBeat> normalStoryBeats = [
         'The ground beneath Haruki glows. One by one, all the people he met—Aki-sensei, Yuto, Hana, Kenta, Emi, Sota, Nao, Toshi, Mei—appear around him in a circle. They bow respectfully.',
     background: 'Principal\'s Office (Inter10).png',
     harukiExpression: 'Haruki (Surprised).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Aki-sensei',
@@ -723,6 +796,7 @@ final List<StoryBeat> normalStoryBeats = [
     character: 'Aki sensei (Smile).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Mei',
@@ -731,18 +805,21 @@ final List<StoryBeat> normalStoryBeats = [
     character: 'Mei (Delighted).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Sad).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text:
         'The characters begin to fade into glowing symbols, swirling around Haruki as the notebook reappears in his hands. A soft wind blows, carrying the sound of distant school bells.',
     background: 'Principal\'s Office (Inter10).png',
     harukiExpression: 'Haruki (Sad).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text:
         'Haruki opens his eyes…\n\nHe\'s back in the real-world school library, sitting exactly where he first found the notebook. The mysterious title on the cover still reads "The Path of Characters," but now—there\'s a new inscription on the last page:\n\n"Those who seek meaning will always find it—in words, in people, in themselves."',
     background: 'Library (Inter3).png',
     harukiExpression: 'Haruki (Surprised).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text:
@@ -755,6 +832,7 @@ final List<StoryBeat> normalStoryBeats = [
         'Congratulations! You\'ve completed your Kanji Journey with Haruki.\nBut remember—this is only the beginning of your own adventure in Japanese learning!',
     background: 'Gate (Intro).png',
     harukiExpression: 'Haruki (Smile1).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 ];
 
@@ -766,6 +844,7 @@ final List<StoryBeat> hardStoryBeats = [
         'Haruki is a high school student who suddenly gets transported to a mysterious academy where every person he meets tests his Kanji skills. If he passes all 10 trials, he can return home—stronger and wiser.',
     background: 'Gate (Intro).png',
     harukiExpression: 'Haruki (Surprised).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 1: Sensei Aki
@@ -774,14 +853,16 @@ final List<StoryBeat> hardStoryBeats = [
         'Haruki wakes up in a classroom bathed in golden light. A kind-looking woman greets him.',
     background: 'Classroom (Inter1).png',
     harukiExpression: 'Haruki (Surprised).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Aki-sensei',
-    text: '学びの旅へようこそ、春樹さん。前に進むためには、基本を理解しなければなりません。',
+    text: 'Manabi no tabi e youkoso, Haruki-san. Mae ni susumu tame ni wa, kihon o rikai shinakereba narimasen.',
     background: 'Classroom (Inter1).png',
     character: 'Aki sensei (Delighted).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text: '',
@@ -789,12 +870,13 @@ final List<StoryBeat> hardStoryBeats = [
     character: 'Aki sensei (Normal).png',
     characterPosition: CharacterPosition.center,
     question: Question(
-      text: 'In the phrase 「学びの旅」(manabi no tabi), what does 学び mean?',
-      options: ['A. To travel', 'B. To teach', 'C. To learn', 'D. To write'],
+      text: 'What is the function of "manabi" in the phrase "manabi no tabi"?',
+      options: ['A. "to learn"', 'B. "learning"', 'C. "educational"', 'D. A particle showing possession'],
       correctAnswer: 'C. To learn',
-      customHint: '学び is the noun form of 学ぶ (to learn). In this context, it means "learning" or "study" as a journey.',
+      customHint: 'The word "manabi" comes from "manabu" (to learn). When used before "no," it becomes a noun that modifies "tabi" — meaning "journey of learning."',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 2: Yuto
@@ -802,14 +884,16 @@ final List<StoryBeat> hardStoryBeats = [
     text: 'Haruki meets a shy first-year named Yuto in the hallway.',
     background: 'Hallway (Inter2).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Yuto',
-    text: '私は学生ですが、「学」と「生」の漢字の意味をいつも混同してしまいます。助けてくれますか？',
+    text: 'Watashi wa gakusei desu ga, “gaku” to “sei” no kanji no imi o itsumo kondou shite shimaimasu. Tasukete kuremasu ka?',
     background: 'Hallway (Inter2).png',
     character: 'Yuto (Sad).png',
     characterPosition: CharacterPosition.right,
     harukiExpression: 'Haruki (Sad).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text: '',
@@ -828,6 +912,7 @@ final List<StoryBeat> hardStoryBeats = [
       customHint: '学生 combines "study" (学) with "life" (生) to mean "student" - someone whose life is dedicated to studying.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 3: Hana
@@ -835,14 +920,15 @@ final List<StoryBeat> hardStoryBeats = [
     text: 'In the library, Haruki meets Hana surrounded by textbooks.',
     background: 'Library (Inter3).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Hana',
-    text: '日記を書いています。この文章を完成させるのを手伝ってくれますか？「私は毎日＿＿＿に行きます。」',
+    text: 'Nikki o kaiteimasu. Kono bunshou o kansei saseru no o tetsudatte kuremasu ka? “Watashi wa mainichi _ _ _ ni ikimasu.”',
     background: 'Library (Inter3).png',
     character: 'Hana (Delighted).png',
     characterPosition: CharacterPosition.left,
-    harukiExpression: 'Haruki (Smile).png',
+    harukiExpression: 'Haruki (Smile1).png',
   ),
   StoryBeat(
     text: '',
@@ -851,12 +937,13 @@ final List<StoryBeat> hardStoryBeats = [
     characterPosition: CharacterPosition.left,
     question: Question(
       text:
-          'Which would be most natural to complete "私は毎日＿＿＿に行きます。" (I go to ___ every day)?',
-      options: ['A. 大学校', 'B. 学校', 'C. 公園校', 'D. 図校'],
-      correctAnswer: 'B. 学校',
-      customHint: '学校 is the standard compound word for "school" combining "study" (学) and "building" (校).',
+          'Which would be most natural to complete "Watashi wa mainichi ___ ni ikimasu." (I go to ___ every day)?',
+      options: ['A. Daigakkou', 'B. Gakkou', 'C. Kouenkou', 'D. Tokou'],
+      correctAnswer: 'B. Gakkou',
+      customHint: '"Gakkou" is the standard compound word for "school," combining "gaku" (study) and "kou" (building).',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 4: Kenta
@@ -864,14 +951,16 @@ final List<StoryBeat> hardStoryBeats = [
     text: 'Kenta jogs past Haruki on the school field.',
     background: 'Athletics Track (Inter4).png',
     harukiExpression: 'Haruki (Normal).png',
+    // soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Kenta',
-    text: '毎日、近くの山を登っています。山と川、どちらの漢字がより複雑だと思いますか？',
+    text: 'Mainichi, chikaku no yama o nobotteimasu. Yama to kawa, dochira no kanji ga yori fukuzatsu da to omoimasu ka?',
     background: 'Athletics Track (Inter4).png',
     character: 'Kenta (Smile).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Laugh).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text: '',
@@ -879,7 +968,7 @@ final List<StoryBeat> hardStoryBeats = [
     character: 'Kenta (Normal).png',
     characterPosition: CharacterPosition.center,
     question: Question(
-      text: 'In the compound 山川 (yamagawa), which meaning is correct?',
+      text: 'In the compound yamagawa (山川), which meaning is correct?',
       options: [
         'A. Mountains and rivers',
         'B. A mountain river',
@@ -890,6 +979,7 @@ final List<StoryBeat> hardStoryBeats = [
       customHint: '山川 combines "mountain" (山) and "river" (川) to mean "mountains and rivers" - representing natural landscapes.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 5: Emi
@@ -897,6 +987,7 @@ final List<StoryBeat> hardStoryBeats = [
     text: 'Haruki sees Emi adjusting a sundial in the courtyard.',
     background: 'Courtyard (Inter5).png',
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Emi',
@@ -905,6 +996,7 @@ final List<StoryBeat> hardStoryBeats = [
     character: 'Emi (Smug).png',
     characterPosition: CharacterPosition.right,
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text: '',
@@ -923,6 +1015,7 @@ final List<StoryBeat> hardStoryBeats = [
       customHint: '時間 combines "time" (時) with "interval" (間) to mean "time period". 時計 combines "time" (時) with "measure" (計) to mean "clock".',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 6: Sota
@@ -930,6 +1023,7 @@ final List<StoryBeat> hardStoryBeats = [
     text: 'Sota breathes fire on stage during a play rehearsal.',
     background: 'Stage (Inter6).png',
     harukiExpression: 'Haruki (Surprised).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Sota',
@@ -956,6 +1050,7 @@ final List<StoryBeat> hardStoryBeats = [
       customHint: '火山 literally means "fire mountain" - combining "fire" (火) and "mountain" (山) to create the word for volcano.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 7: Nao
@@ -963,6 +1058,7 @@ final List<StoryBeat> hardStoryBeats = [
     text: 'Nao dives into the pool with a splash.',
     background: 'Pool (Inter7).png',
     harukiExpression: 'Haruki (Surprised).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Nao',
@@ -970,7 +1066,7 @@ final List<StoryBeat> hardStoryBeats = [
     background: 'Pool (Inter7).png',
     character: 'Nao (Smile).png',
     characterPosition: CharacterPosition.left,
-    harukiExpression: 'Haruki (Smile).png',
+    harukiExpression: 'Haruki (Smile1).png',
   ),
   StoryBeat(
     text: '',
@@ -984,6 +1080,7 @@ final List<StoryBeat> hardStoryBeats = [
       customHint: '泳 means "to swim" and combines with 水 (water) to form 水泳 (swimming). The character represents movement through water.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 8: Toshi
@@ -991,6 +1088,7 @@ final List<StoryBeat> hardStoryBeats = [
     text: 'In the calligraphy room, Toshi shows Haruki a half-written scroll.',
     background: 'Arts Room (Inter8).png',
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Toshi',
@@ -999,6 +1097,7 @@ final List<StoryBeat> hardStoryBeats = [
     character: 'Toshi (Delighted).png',
     characterPosition: CharacterPosition.right,
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text: '',
@@ -1012,6 +1111,7 @@ final List<StoryBeat> hardStoryBeats = [
       customHint: '長 means "head" or "chief" in this context. 校長先生 means "principal teacher" - the head of the school.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 9: Mei
@@ -1019,6 +1119,7 @@ final List<StoryBeat> hardStoryBeats = [
     text: 'Mei greets Haruki with a bright smile in the study hall.',
     background: 'Student Council Room (Inter9).png',
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Mei',
@@ -1026,7 +1127,7 @@ final List<StoryBeat> hardStoryBeats = [
     background: 'Student Council Room (Inter9).png',
     character: 'Mei (Smile2).png',
     characterPosition: CharacterPosition.center,
-    harukiExpression: 'Haruki (Smile).png',
+    harukiExpression: 'Haruki (Smile1).png',
   ),
   StoryBeat(
     text: '',
@@ -1045,6 +1146,7 @@ final List<StoryBeat> hardStoryBeats = [
       customHint: '大学生 means "university student" while 大学院生 means "graduate student" - someone studying at the graduate level.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Interaction 10: Professor Hoshino
@@ -1052,6 +1154,7 @@ final List<StoryBeat> hardStoryBeats = [
     text: 'Haruki enters the final chamber, where an older professor awaits.',
     background: 'Principal\'s Office (Inter10).png',
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Professor Hoshino',
@@ -1060,6 +1163,7 @@ final List<StoryBeat> hardStoryBeats = [
     character: 'Prof Hoshino (Normal).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text: '',
@@ -1079,6 +1183,7 @@ final List<StoryBeat> hardStoryBeats = [
       customHint: 'The correct word order is: Subject (私) + Location (大学で) + Object (日本語を) + Verb (勉強しています). で indicates the location where the action takes place.',
     ),
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
 
   // Ending (same as other modes)
@@ -1087,6 +1192,7 @@ final List<StoryBeat> hardStoryBeats = [
         'As Haruki answers the final question, the air around him shimmers with golden light. Professor Hoshino smiles and slowly closes the ancient book he had been holding.',
     background: 'Principal\'s Office (Inter10).png',
     harukiExpression: 'Haruki (Smile1).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Professor Hoshino',
@@ -1102,6 +1208,7 @@ final List<StoryBeat> hardStoryBeats = [
         'The ground beneath Haruki glows. One by one, all the people he met—Aki-sensei, Yuto, Hana, Kenta, Emi, Sota, Nao, Toshi, Mei—appear around him in a circle. They bow respectfully.',
     background: 'Principal\'s Office (Inter10).png',
     harukiExpression: 'Haruki (Surprised).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Aki-sensei',
@@ -1111,6 +1218,7 @@ final List<StoryBeat> hardStoryBeats = [
     character: 'Aki sensei (Smile).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Normal).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     speaker: 'Mei',
@@ -1119,18 +1227,21 @@ final List<StoryBeat> hardStoryBeats = [
     character: 'Mei (Delighted).png',
     characterPosition: CharacterPosition.center,
     harukiExpression: 'Haruki (Sad).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text:
         'The characters begin to fade into glowing symbols, swirling around Haruki as the notebook reappears in his hands. A soft wind blows, carrying the sound of distant school bells.',
     background: 'Principal\'s Office (Inter10).png',
     harukiExpression: 'Haruki (Sad).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text:
         'Haruki opens his eyes…\n\nHe\'s back in the real-world school library, sitting exactly where he first found the notebook. The mysterious title on the cover still reads "The Path of Characters," but now—there\'s a new inscription on the last page:\n\n"Those who seek meaning will always find it—in words, in people, in themselves."',
     background: 'Library (Inter3).png',
     harukiExpression: 'Haruki (Surprised).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
   StoryBeat(
     text:
@@ -1143,5 +1254,6 @@ final List<StoryBeat> hardStoryBeats = [
         'Congratulations! You\'ve completed your Kanji Journey with Haruki.\nBut remember—this is only the beginning of your own adventure in Japanese learning!',
     background: 'Gate (Intro).png',
     harukiExpression: 'Haruki (Smile1).png',
+    soundFile: 'assets/sounds/Aki1.wav',
   ),
 ];

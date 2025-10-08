@@ -1,4 +1,5 @@
 import 'package:animated_text_kit/animated_text_kit.dart';
+import 'dart:async';
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -108,6 +109,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
   final AudioPlayer _incorrectSoundPlayer = AudioPlayer();
   final AudioPlayer _victoryMusicPlayer = AudioPlayer();
   final AudioPlayer _heartLostSoundPlayer = AudioPlayer(); // NEW: Heart lost sound
+  final AudioPlayer _characterSoundPlayer = AudioPlayer(); // NEW: Character voice sounds
 
   // Loading screen state
   bool _isLoading = true;
@@ -298,7 +300,8 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     _correctSoundPlayer.dispose();
     _incorrectSoundPlayer.dispose();
     _victoryMusicPlayer.dispose();
-    _heartLostSoundPlayer.dispose(); // NEW
+    _heartLostSoundPlayer.dispose();
+    _characterSoundPlayer.dispose(); // NEW
     // Add this in dispose()
     _floatingMessageController.dispose();
     super.dispose();
@@ -317,6 +320,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
       await _incorrectSoundPlayer.setVolume(0.6);
       await _victoryMusicPlayer.setVolume(0.9);
       await _heartLostSoundPlayer.setVolume(0.7); // NEW
+      await _characterSoundPlayer.setVolume(0.8); // Character voice volume
     } catch (e) {
       print('Error initializing sound effects: $e');
     }
@@ -347,6 +351,58 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
       await _heartLostSoundPlayer.play();
     } catch (e) {
       print('Error playing heart lost sound: $e');
+    }
+  }
+
+  // NEW: Play character voice sound
+  Future<void> _playCharacterSound(String soundFile) async {
+    try {
+      print('DEBUG: ===== CHARACTER SOUND DEBUG =====');
+      print('DEBUG: Attempting to play: $soundFile');
+      print('DEBUG: Character sound player state: ${_characterSoundPlayer.processingState}');
+      
+      // Stop any currently playing sound on this player
+      await _characterSoundPlayer.stop();
+      print('DEBUG: Stopped any existing character sound');
+      
+      // Set the asset
+      await _characterSoundPlayer.setAsset(soundFile);
+      print('DEBUG: Asset set successfully');
+      
+      // Set volume (lower so it doesn't overpower background music)
+      await _characterSoundPlayer.setVolume(0.6);
+      print('DEBUG: Volume set to 0.6 (layered with background music)');
+      
+      // Seek to start
+      await _characterSoundPlayer.seek(Duration.zero);
+      print('DEBUG: Seeked to start');
+      
+      // Play the sound
+      await _characterSoundPlayer.play();
+      print('DEBUG: Play command executed');
+      
+      // Listen to state changes
+      _characterSoundPlayer.processingStateStream.listen((state) {
+        print('DEBUG: Character sound state changed to: $state');
+      });
+      
+      print('DEBUG: ===== END CHARACTER SOUND DEBUG =====');
+    } catch (e) {
+      print('ERROR: ===== CHARACTER SOUND ERROR =====');
+      print('ERROR: Failed to play character sound: $e');
+      print('ERROR: Sound file: $soundFile');
+      print('ERROR: ===== END CHARACTER SOUND ERROR =====');
+    }
+  }
+
+  // NEW: Stop character voice sound
+  Future<void> _stopCharacterSound() async {
+    try {
+      print('DEBUG: Stopping character sound');
+      await _characterSoundPlayer.stop();
+      print('DEBUG: Character sound stopped');
+    } catch (e) {
+      print('ERROR: Error stopping character sound: $e');
     }
   }
 
@@ -921,6 +977,9 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
       return;
     }
 
+    // Stop character sound when user taps to continue
+    _stopCharacterSound();
+
     // Check if we're currently showing the failure dialogue
     if (_isFailureDialogue()) {
       // User tapped - now show failure screen
@@ -1089,6 +1148,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
         _completedInteraction = endOfInteraction;
       });
 
+
       if (_completedInteraction) {
         _currentInteraction++;
         _showLoadingScreen();
@@ -1102,6 +1162,9 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
   }
 
   void _selectAnswer(String answer) {
+    // Stop character sound when user selects an answer
+    _stopCharacterSound();
+    
     setState(() {
       _selectedAnswer = answer;
     });
@@ -2487,6 +2550,13 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
   }
 
   Widget _buildEnhancedDialogView(StoryBeat beat) {
+    // Play character sound immediately when dialog appears (text animation starts)
+    if (beat.soundFile != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _playCharacterSound(beat.soundFile!);
+      });
+    }
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
