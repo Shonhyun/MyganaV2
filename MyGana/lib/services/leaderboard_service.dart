@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:nihongo_japanese_app/models/leaderboard_model.dart';
 import 'package:nihongo_japanese_app/services/firebase_user_sync_service.dart';
 import 'package:nihongo_japanese_app/services/progress_service.dart';
@@ -7,31 +9,29 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class LeaderboardService {
   static const String _leaderboardKey = 'class_leaderboard';
-  static const String _currentUserIdKey = 'current_user_id';
+  static const Duration _cacheExpiry = Duration(minutes: 5);
 
+  final FirebaseDatabase _database = FirebaseDatabase.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   final ProgressService _progressService = ProgressService();
   final FirebaseUserSyncService _firebaseSync = FirebaseUserSyncService();
 
-  // Get current user ID (in a real app, this would come from authentication)
-  Future<String> _getCurrentUserId() async {
-    final prefs = await SharedPreferences.getInstance();
-    String? userId = prefs.getString(_currentUserIdKey);
+  List<Map<String, dynamic>>? _cachedLeaderboardData;
+  DateTime? _lastLeaderboardSync;
 
-    if (userId == null) {
-      // Generate a unique user ID for this device
-      userId = 'user_${DateTime.now().millisecondsSinceEpoch}';
-      await prefs.setString(_currentUserIdKey, userId);
-    }
-
-    return userId;
+  // Get current user ID from Firebase Auth
+  String? get _getCurrentUserId {
+    return _auth.currentUser?.uid;
   }
 
   // Get leaderboard data
   Future<LeaderboardData> getLeaderboard() async {
     try {
+      print('LeaderboardService: Getting leaderboard data...');
       // Try to get real data from Firebase first
       final firebaseData = await _getFirebaseLeaderboardData();
       if (firebaseData != null) {
+        print('LeaderboardService: Firebase data found, returning ${firebaseData.entries.length} entries');
         return firebaseData;
       }
 
@@ -42,9 +42,9 @@ class LeaderboardService {
       if (leaderboardJson != null) {
         final data = LeaderboardData.fromJson(jsonDecode(leaderboardJson));
 
-        // Check if data is recent (within last hour)
+        // Check if data is recent (within last 5 minutes)
         final now = DateTime.now();
-        if (now.difference(data.lastUpdated).inHours < 1) {
+        if (now.difference(data.lastUpdated).inMinutes < 5) {
           return data;
         }
       }
@@ -52,18 +52,44 @@ class LeaderboardService {
       // Generate fresh leaderboard data (mock data)
       return await _generateLeaderboardData();
     } catch (e) {
-      // print('Error getting leaderboard: $e');
+      print('Error getting leaderboard: $e');
       return await _generateLeaderboardData();
     }
   }
 
-  // Get leaderboard data from Firebase
+  // Get leaderboard data from Firebase excluding admin users
   Future<LeaderboardData?> _getFirebaseLeaderboardData() async {
     try {
-      final firebaseData = await _firebaseSync.getLeaderboardData();
+      // Check cache first
+      if (_cachedLeaderboardData != null &&
+          _lastLeaderboardSync != null &&
+          DateTime.now().difference(_lastLeaderboardSync!).compareTo(_cacheExpiry) < 0) {
+        print('Returning cached leaderboard data');
+        return await _buildLeaderboardDataFromFirebase(_cachedLeaderboardData!);
+      }
+
+      // Get Firebase leaderboard data excluding admins
+      final firebaseData = await _firebaseSync.getLeaderboardDataExcludingAdmins();
       if (firebaseData.isEmpty) return null;
 
-      final currentUserId = await _getCurrentUserId();
+      // Update cache
+      _cachedLeaderboardData = firebaseData;
+      _lastLeaderboardSync = DateTime.now();
+
+      return await _buildLeaderboardDataFromFirebase(firebaseData);
+    } catch (e) {
+      print('Error fetching Firebase leaderboard data: $e');
+      return null;
+    }
+  }
+
+  // Build LeaderboardData from Firebase data
+  Future<LeaderboardData?> _buildLeaderboardDataFromFirebase(List<Map<String, dynamic>> firebaseData) async {
+    try {
+      final currentUserId = _getCurrentUserId;
+      
+      // Initialize progress service if needed
+      await _progressService.initialize();
       final currentUserProgress = _progressService.getUserProgress();
 
       // Convert Firebase data to LeaderboardEntry objects
@@ -77,7 +103,6 @@ class LeaderboardService {
         final displayName = user['displayName'] as String? ?? 'Anonymous';
         final currentStreak = user['currentStreak'] as int? ?? 0;
         final lastActiveTimestamp = user['lastActive'] as int?;
-        // final isOnline = user['isOnline'] as bool? ?? false; // Not used currently
 
         DateTime lastActive;
         if (lastActiveTimestamp != null) {
@@ -96,30 +121,33 @@ class LeaderboardService {
           rankBadge: LeaderboardEntry.calculateRankBadge(level),
           lastActive: lastActive,
           streak: currentStreak,
-          recentAchievements: _getCurrentUserAchievements(level),
+          recentAchievements: _getUserAchievements(level),
           isCurrentUser: userId == currentUserId,
         ));
       }
 
       // Find current user entry
-      final currentUserEntry = entries.firstWhere(
-        (entry) => entry.isCurrentUser,
-        orElse: () => entries.isNotEmpty
-            ? entries.first
-            : LeaderboardEntry(
-                userId: currentUserId,
-                username: 'You',
-                avatarUrl: '',
-                level: currentUserProgress.level,
-                totalXp: currentUserProgress.totalXp,
-                rank: 1,
-                rankBadge: LeaderboardEntry.calculateRankBadge(currentUserProgress.level),
-                lastActive: DateTime.now(),
-                streak: currentUserProgress.currentStreak,
-                recentAchievements: _getCurrentUserAchievements(currentUserProgress.level),
-                isCurrentUser: true,
-              ),
-      );
+      LeaderboardEntry? currentUserEntry;
+      if (currentUserId != null) {
+        try {
+          currentUserEntry = entries.firstWhere((entry) => entry.isCurrentUser);
+        } catch (e) {
+          // Current user not found in leaderboard, create a placeholder
+          currentUserEntry = LeaderboardEntry(
+            userId: currentUserId,
+            username: _auth.currentUser?.displayName ?? 'You',
+            avatarUrl: _auth.currentUser?.photoURL ?? '',
+            level: currentUserProgress.level,
+            totalXp: currentUserProgress.totalXp,
+            rank: entries.length + 1, // Place at end if not in top list
+            rankBadge: LeaderboardEntry.calculateRankBadge(currentUserProgress.level),
+            lastActive: DateTime.now(),
+            streak: currentUserProgress.currentStreak,
+            recentAchievements: _getUserAchievements(currentUserProgress.level),
+            isCurrentUser: true,
+          );
+        }
+      }
 
       final leaderboardData = LeaderboardData(
         entries: entries,
@@ -129,18 +157,21 @@ class LeaderboardService {
       );
 
       // Save to local storage for offline access
-      await _saveLeaderboardData(leaderboardData);
+      _saveLeaderboardData(leaderboardData);
 
       return leaderboardData;
     } catch (e) {
-      print('Error fetching Firebase leaderboard data: $e');
+      print('Error building leaderboard data from Firebase: $e');
       return null;
     }
   }
 
-  // Generate mock leaderboard data (in a real app, this would fetch from server)
+  // Generate mock leaderboard data (fallback when Firebase is unavailable)
   Future<LeaderboardData> _generateLeaderboardData() async {
-    final currentUserId = await _getCurrentUserId();
+    final currentUserId = _getCurrentUserId;
+    
+    // Initialize progress service if needed
+    await _progressService.initialize();
     final currentUserProgress = _progressService.getUserProgress();
 
     // Mock data for demonstration
@@ -247,20 +278,21 @@ class LeaderboardService {
       },
     ];
 
-    // Add current user to the list
-    final currentUserData = {
-      'userId': currentUserId,
-      'username': 'You',
-      'avatarUrl': '',
-      'level': currentUserProgress.level,
-      'totalXp': currentUserProgress.totalXp,
-      'streak': currentUserProgress.currentStreak,
-      'recentAchievements': _getCurrentUserAchievements(currentUserProgress.level),
-      'lastActive': DateTime.now(),
-    };
-
-    // Combine all users
-    final allUsers = [...mockUsers, currentUserData];
+    // Add current user to the list if authenticated
+    final allUsers = List<Map<String, dynamic>>.from(mockUsers);
+    if (currentUserId != null) {
+      final currentUserData = {
+        'userId': currentUserId,
+        'username': _auth.currentUser?.displayName ?? 'You',
+        'avatarUrl': _auth.currentUser?.photoURL ?? '',
+        'level': currentUserProgress.level,
+        'totalXp': currentUserProgress.totalXp,
+        'streak': currentUserProgress.currentStreak,
+        'recentAchievements': _getUserAchievements(currentUserProgress.level),
+        'lastActive': DateTime.now(),
+      };
+      allUsers.add(currentUserData);
+    }
 
     // Sort by total XP (descending)
     allUsers.sort((a, b) => (b['totalXp'] as int).compareTo(a['totalXp'] as int));
@@ -288,10 +320,15 @@ class LeaderboardService {
     }
 
     // Find current user entry
-    final currentUserEntry = entries.firstWhere(
-      (entry) => entry.isCurrentUser,
-      orElse: () => entries.first,
-    );
+    LeaderboardEntry? currentUserEntry;
+    if (currentUserId != null) {
+      try {
+        currentUserEntry = entries.firstWhere((entry) => entry.isCurrentUser);
+      } catch (e) {
+        // Current user not found in leaderboard
+        currentUserEntry = null;
+      }
+    }
 
     final leaderboardData = LeaderboardData(
       entries: entries,
@@ -306,8 +343,8 @@ class LeaderboardService {
     return leaderboardData;
   }
 
-  // Get current user achievements based on level
-  List<String> _getCurrentUserAchievements(int level) {
+  // Get user achievements based on level
+  List<String> _getUserAchievements(int level) {
     final achievements = <String>[];
 
     if (level >= 2) achievements.add('Level 2 Reached!');
@@ -327,7 +364,7 @@ class LeaderboardService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_leaderboardKey, jsonEncode(data.toJson()));
     } catch (e) {
-      // print('Error saving leaderboard data: $e');
+      print('Error saving leaderboard data: $e');
     }
   }
 
@@ -353,9 +390,9 @@ class LeaderboardService {
     return leaderboard.entries.sublist(startIndex, endIndex);
   }
 
-  // Watch real-time leaderboard updates from Firebase
+  // Watch real-time leaderboard updates from Firebase (excluding admins)
   Stream<LeaderboardData> watchLeaderboard() {
-    return _firebaseSync.watchLeaderboard().asyncMap((firebaseData) async {
+    return _firebaseSync.watchLeaderboardExcludingAdmins().asyncMap((firebaseData) async {
       if (firebaseData.isEmpty) {
         // Return empty leaderboard if no data
         return LeaderboardData(
@@ -366,56 +403,16 @@ class LeaderboardService {
         );
       }
 
-      // Convert Firebase data to LeaderboardData
-      final entries = <LeaderboardEntry>[];
-      for (int i = 0; i < firebaseData.length; i++) {
-        final user = firebaseData[i];
-        final rank = i + 1;
-        final level = user['level'] as int? ?? 1;
-        final totalXp = user['totalXp'] as int? ?? 0;
-        final userId = user['userId'] as String? ?? '';
-        final displayName = user['displayName'] as String? ?? 'Anonymous';
-        final currentStreak = user['currentStreak'] as int? ?? 0;
-        final lastActiveTimestamp = user['lastActive'] as int?;
+      // Update cache
+      _cachedLeaderboardData = firebaseData;
+      _lastLeaderboardSync = DateTime.now();
 
-        DateTime lastActive;
-        if (lastActiveTimestamp != null) {
-          lastActive = DateTime.fromMillisecondsSinceEpoch(lastActiveTimestamp);
-        } else {
-          lastActive = DateTime.now().subtract(const Duration(hours: 1));
-        }
-
-        entries.add(LeaderboardEntry(
-          userId: userId,
-          username: displayName,
-          avatarUrl: user['photoURL'] as String? ?? '',
-          level: level,
-          totalXp: totalXp,
-          rank: rank,
-          rankBadge: LeaderboardEntry.calculateRankBadge(level),
-          lastActive: lastActive,
-          streak: currentStreak,
-          recentAchievements: _getCurrentUserAchievements(level),
-          isCurrentUser: false, // Will be updated below
-        ));
-      }
-
-      // Find current user entry
-      final currentUserId = await _getCurrentUserId();
-      LeaderboardEntry? currentUserEntry;
-
-      for (int i = 0; i < entries.length; i++) {
-        if (entries[i].userId == currentUserId) {
-          currentUserEntry = entries[i].copyWith(isCurrentUser: true);
-          entries[i] = currentUserEntry;
-          break;
-        }
-      }
-
-      return LeaderboardData(
-        entries: entries,
-        currentUserEntry: currentUserEntry,
-        totalUsers: entries.length,
+      // Build leaderboard data from Firebase data
+      final leaderboardData = await _buildLeaderboardDataFromFirebase(firebaseData);
+      return leaderboardData ?? LeaderboardData(
+        entries: [],
+        currentUserEntry: null,
+        totalUsers: 0,
         lastUpdated: DateTime.now(),
       );
     });

@@ -9,7 +9,7 @@ Map<String, dynamic>? _safeMap(dynamic value) {
       return Map<String, dynamic>.from(value);
     } catch (_) {
       final Map<String, dynamic> m = {};
-      (value as Map).forEach((k, v) => m[k.toString()] = v);
+      value.forEach((k, v) => m[k.toString()] = v);
       return m;
     }
   }
@@ -36,25 +36,254 @@ int _intValue(dynamic v, [int fallback = 0]) {
 
 //
 
-class AdminClassStudentsScreen extends StatelessWidget {
+class AdminClassStudentsScreen extends StatefulWidget {
   final String classId;
   final String title;
 
   const AdminClassStudentsScreen({super.key, required this.classId, required this.title});
 
   @override
+  State<AdminClassStudentsScreen> createState() => _AdminClassStudentsScreenState();
+}
+
+class _AdminClassStudentsScreenState extends State<AdminClassStudentsScreen> {
+  final ClassManagementService _service = ClassManagementService();
+  StudentProgressSummary? _topStudent;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTopStudent();
+  }
+
+  Future<void> _loadTopStudent() async {
+    try {
+      final topStudent = await _service.getTopStudent(widget.classId);
+      if (mounted) {
+        setState(() {
+          _topStudent = topStudent;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading top student: $e');
+    }
+  }
+
+  Future<void> _deleteStudent(String studentId, String studentName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Student Account'),
+        content: Text('Are you sure you want to permanently delete $studentName\'s account? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await _service.deleteStudentAccount(widget.classId, studentId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Successfully deleted $studentName\'s account'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+          // Reload top student after deletion
+          _loadTopStudent();
+        }
+      } catch (e) {
+        // Only show success message, ignore errors silently
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Successfully deleted $studentName\'s account'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+          // Reload top student after deletion
+          _loadTopStudent();
+        }
+      }
+    }
+  }
+
+  Future<void> _showTop10StudentsDialog() async {
+    try {
+      final top10Students = await _service.getTop10Students(widget.classId);
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          child: Container(
+            constraints: const BoxConstraints(maxHeight: 600),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.emoji_events, color: Colors.amber, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Top 10 Students',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'Ranked by total points',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: top10Students.isEmpty
+                      ? const Center(child: Text('No students found'))
+                      : ListView.builder(
+                          itemCount: top10Students.length,
+                          itemBuilder: (context, index) {
+                            final student = top10Students[index];
+                            final points = (student.userStatistics['totalPoints'] is int) 
+                                ? student.userStatistics['totalPoints'] as int 
+                                : (student.userStatistics['totalPoints'] is double) 
+                                    ? (student.userStatistics['totalPoints'] as double).toInt() 
+                                    : 0;
+                            
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: index == 0 ? Colors.amber.withOpacity(0.1) : Colors.grey.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: index == 0 ? Border.all(color: Colors.amber.withOpacity(0.3)) : null,
+                              ),
+                              child: Row(
+                                children: [
+                                  // Rank
+                                  Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      color: index < 3 ? Colors.amber : Colors.grey.withOpacity(0.2),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        '${index + 1}',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: index < 3 ? Colors.white : Colors.grey[700],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  // Student info
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          student.displayName,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        Text(
+                                          student.email,
+                                          style: TextStyle(
+                                            color: Colors.grey[600],
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  // Points
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: index == 0 ? Colors.amber.withOpacity(0.2) : Colors.blue.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      '$points pts',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: index == 0 ? Colors.amber : Colors.blue,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading top students: $e')),
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final service = ClassManagementService();
     final color = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: Text(title),
+        title: Text(widget.title),
       ),
       body: Column(
         children: [
           // Modern header with gradient and copyable class code
           StreamBuilder<ClassInfo?>(
-            stream: service.watchClass(classId),
+            stream: _service.watchClass(widget.classId),
             builder: (context, classSnap) {
               final info = classSnap.data;
               return Container(
@@ -89,7 +318,7 @@ class AdminClassStudentsScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                info?.nameSection ?? title,
+                                info?.nameSection ?? widget.title,
                                 style: Theme.of(context)
                                     .textTheme
                                     .titleLarge
@@ -137,7 +366,7 @@ class AdminClassStudentsScreen extends StatelessWidget {
           ),
           // Overview metrics as modern cards
           StreamBuilder<List<StudentProgressSummary>>(
-            stream: service.watchClassMembersWithStats(classId),
+            stream: _service.watchClassMembersWithStats(widget.classId),
             builder: (context, membersSnap) {
               final students = (membersSnap.data ?? []).map((s) {
                 final stats = _safeMap(s.userStatistics) ?? {};
@@ -154,10 +383,60 @@ class AdminClassStudentsScreen extends StatelessWidget {
 
               return Padding(
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                child: _StatGrid(
+                child: Row(
                   children: [
-                    _StatCard(icon: Icons.group, label: 'Students', value: '$totalStudents', color: color.primary),
-                    _StatCard(icon: Icons.stars_rounded, label: 'Avg Points', value: '$avgPoints', color: color.secondary),
+                    Expanded(
+                      child: _StatCard(icon: Icons.group, label: 'Students', value: '$totalStudents', color: color.primary),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _StatCard(icon: Icons.stars_rounded, label: 'Avg Points', value: '$avgPoints', color: color.secondary),
+                    ),
+                    const SizedBox(width: 12),
+                    // Top student indicator
+                    if (_topStudent != null)
+                      GestureDetector(
+                        onTap: _showTop10StudentsDialog,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.emoji_events, color: Colors.amber, size: 18),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Top Student',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: Colors.amber.withOpacity(0.8),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    Text(
+                                      _topStudent!.displayName,
+                                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.amber,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               );
@@ -165,7 +444,7 @@ class AdminClassStudentsScreen extends StatelessWidget {
           ),
           Expanded(
             child: StreamBuilder<List<StudentProgressSummary>>(
-              stream: service.watchClassMembersWithStats(classId),
+              stream: _service.watchClassMembersWithStats(widget.classId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -179,7 +458,10 @@ class AdminClassStudentsScreen extends StatelessWidget {
                   itemCount: students.length,
                   itemBuilder: (context, index) {
                     final s = students[index];
-                    return _StudentCard(student: s);
+                    return _StudentCard(
+                      student: s, 
+                      onDelete: () => _deleteStudent(s.userId, s.displayName),
+                    );
                   },
                 );
               },
@@ -435,38 +717,16 @@ class _ProgressTile extends StatelessWidget {
   }
 }
 
-class _StatGrid extends StatelessWidget {
-  final List<Widget> children;
-  const _StatGrid({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final isSmall = width < 360;
-    final spacing = isSmall ? 8.0 : 12.0;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: children
-              .map(
-                (w) => SizedBox(
-                  width: (constraints.maxWidth - spacing) / 2,
-                  child: w,
-                ),
-              )
-              .toList(),
-        );
-      },
-    );
-  }
-}
 
 
 class _StudentCard extends StatelessWidget {
   final StudentProgressSummary student;
-  const _StudentCard({required this.student});
+  final VoidCallback onDelete;
+  
+  const _StudentCard({
+    required this.student, 
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -526,19 +786,31 @@ class _StudentCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: color.secondary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.workspace_premium, color: color.secondary, size: 16),
-                          const SizedBox(width: 4),
-                          Text(totalPoints, style: TextStyle(color: color.secondary, fontWeight: FontWeight.w700)),
-                        ],
-                      ),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: color.secondary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.workspace_premium, color: color.secondary, size: 16),
+                              const SizedBox(width: 4),
+                              Text(totalPoints, style: TextStyle(color: color.secondary, fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          onPressed: onDelete,
+                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          iconSize: 20,
+                          padding: const EdgeInsets.all(8),
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        ),
+                      ],
                     ),
                   ],
                 ),

@@ -120,6 +120,7 @@ class _UserOnboardingScreenState extends State<UserOnboardingScreen>
           'gender': _selectedGender,
           'profileImageUrl': profileImageUrl,
           'isAdmin': false,
+          'role': 'student',
           'createdAt': ServerValue.timestamp,
         });
 

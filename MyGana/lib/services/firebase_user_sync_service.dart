@@ -34,10 +34,41 @@ class FirebaseUserSyncService {
   DateTime? _lastLeaderboardSync;
   static const Duration _cacheExpiry = Duration(minutes: 5);
 
+  // Firebase listeners management
+  StreamSubscription<DatabaseEvent>? _userDataListener;
+  StreamSubscription<DatabaseEvent>? _leaderboardListener;
+  String? _currentListenerUid;
+
   // Initialize sync service
   void initialize() {
     _startSyncTimer();
     _checkConnectivity();
+    _setupRealtimeListeners();
+  }
+
+  // Clear listeners and cache when user changes
+  void clearUserData() {
+    print('Clearing Firebase listeners and cache for user change');
+    
+    // Cancel existing listeners
+    _userDataListener?.cancel();
+    _leaderboardListener?.cancel();
+    _userDataListener = null;
+    _leaderboardListener = null;
+    
+    // Clear cache
+    _cachedUserData = null;
+    _cachedLeaderboardData = null;
+    _lastUserDataSync = null;
+    _lastLeaderboardSync = null;
+    _currentListenerUid = null;
+    
+    print('Firebase listeners and cache cleared');
+  }
+
+  // Refresh listeners for current user (useful when auth state changes)
+  void refreshListeners() {
+    print('Refreshing Firebase listeners for current user');
     _setupRealtimeListeners();
   }
 
@@ -185,6 +216,11 @@ class FirebaseUserSyncService {
 
       // Validate and sanitize data before sync
       final validatedData = _validateAndSanitizeUserData(userData);
+
+      // IMPORTANT: Do not overwrite per-character marks subtree; those are
+      // managed via setCharacterMark() at users/{uid}/characterProgress/{characterId}
+      // Removing here prevents a full-node replace that would wipe siblings
+      validatedData.remove('characterProgress');
 
       // Update user data in Firebase
       await _database.child('users').child(user.uid).update(validatedData);
@@ -476,7 +512,11 @@ class FirebaseUserSyncService {
       });
 
       // Sort by XP (descending)
-      leaderboard.sort((a, b) => (b['totalXp'] as int).compareTo(a['totalXp'] as int));
+      leaderboard.sort((a, b) {
+        final aXp = a['totalXp'] as int? ?? 0;
+        final bXp = b['totalXp'] as int? ?? 0;
+        return bXp.compareTo(aXp);
+      });
 
       // Cache the result
       _cachedLeaderboardData = leaderboard;
@@ -545,7 +585,119 @@ class FirebaseUserSyncService {
       });
 
       // Sort by XP (descending)
-      leaderboard.sort((a, b) => (b['totalXp'] as int).compareTo(a['totalXp'] as int));
+      leaderboard.sort((a, b) {
+        final aXp = a['totalXp'] as int? ?? 0;
+        final bXp = b['totalXp'] as int? ?? 0;
+        return bXp.compareTo(aXp);
+      });
+
+      return leaderboard;
+    });
+  }
+
+  // Get leaderboard data excluding admin users
+  Future<List<Map<String, dynamic>>> getLeaderboardDataExcludingAdmins({bool forceRefresh = false}) async {
+    try {
+      // Check cache first
+      if (!forceRefresh &&
+          _cachedLeaderboardData != null &&
+          _lastLeaderboardSync != null &&
+          DateTime.now().difference(_lastLeaderboardSync!).compareTo(_cacheExpiry) < 0) {
+        print('Returning cached leaderboard data (excluding admins)');
+        return _cachedLeaderboardData!;
+      }
+
+      // Get all leaderboard data
+      final snapshot = await _database.child('leaderboard').orderByChild('totalXp').get();
+
+      if (snapshot.value == null) return [];
+
+      final Map<dynamic, dynamic> data = snapshot.value as Map<dynamic, dynamic>;
+      final List<Map<String, dynamic>> leaderboard = [];
+
+      // Get all user IDs to check admin status
+      final userIds = data.keys.toList();
+      final adminUserIds = <String>{};
+
+      // Check which users are admins
+      for (final userId in userIds) {
+        try {
+          final userSnapshot = await _database.child('users').child(userId).child('isAdmin').get();
+          if (userSnapshot.exists && userSnapshot.value == true) {
+            adminUserIds.add(userId);
+          }
+        } catch (e) {
+          print('Error checking admin status for user $userId: $e');
+        }
+      }
+
+      // Filter out admin users and build leaderboard
+      data.forEach((key, value) {
+        if (!adminUserIds.contains(key)) {
+          final entry = Map<String, dynamic>.from(value as Map);
+          entry['userId'] = key;
+          leaderboard.add(entry);
+        }
+      });
+
+      // Sort by XP (descending)
+      leaderboard.sort((a, b) {
+        final aXp = a['totalXp'] as int? ?? 0;
+        final bXp = b['totalXp'] as int? ?? 0;
+        return bXp.compareTo(aXp);
+      });
+
+      // Cache the result
+      _cachedLeaderboardData = leaderboard;
+      _lastLeaderboardSync = DateTime.now();
+
+      return leaderboard;
+    } catch (e) {
+      print('Error fetching leaderboard data (excluding admins): $e');
+      // Return cached data if available, even if expired
+      return _cachedLeaderboardData ?? [];
+    }
+  }
+
+  // Watch real-time leaderboard updates excluding admin users
+  Stream<List<Map<String, dynamic>>> watchLeaderboardExcludingAdmins() {
+    return _database.child('leaderboard').orderByChild('totalXp').onValue.asyncMap((event) async {
+      if (event.snapshot.value == null) return [];
+
+      final Map<dynamic, dynamic> data = event.snapshot.value as Map<dynamic, dynamic>;
+      
+      // Get all user IDs to check admin status
+      final userIds = data.keys.toList();
+      final adminUserIds = <String>{};
+
+      // Check which users are admins
+      for (final userId in userIds) {
+        try {
+          final userSnapshot = await _database.child('users').child(userId).child('isAdmin').get();
+          if (userSnapshot.exists && userSnapshot.value == true) {
+            adminUserIds.add(userId);
+          }
+        } catch (e) {
+          print('Error checking admin status for user $userId: $e');
+        }
+      }
+
+      // Filter out admin users and build leaderboard
+      final List<Map<String, dynamic>> leaderboard = [];
+      data.forEach((key, value) {
+        if (!adminUserIds.contains(key)) {
+          final entry = Map<String, dynamic>.from(value as Map);
+          entry['userId'] = key;
+          leaderboard.add(entry);
+        }
+      });
+
+      // Sort by XP (descending)
+      leaderboard.sort((a, b) {
+        final aXp = a['totalXp'] as int? ?? 0;
+        final bXp = b['totalXp'] as int? ?? 0;
+        return bXp.compareTo(aXp);
+      });
 
       return leaderboard;
     });
@@ -630,6 +782,80 @@ class FirebaseUserSyncService {
   bool get isOnline => _isOnline;
   int get queuedOperations => _syncQueue.length;
   int get retryCount => _retryCount;
+
+  // -------- Character marks (writing) --------
+  Future<void> setCharacterMark({
+    required String characterId,
+    required String script,
+    required String mark,
+    required int scorePercent,
+    String? drawingPath,
+  }) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+
+      final done = mark == 'goods' || mark == 'excellent';
+      final now = ServerValue.timestamp;
+
+      final payload = {
+        'characterId': characterId,
+        'script': script,
+        'mark': mark,
+        'scorePercent': scorePercent,
+        'done': done,
+        'drawingPath': drawingPath,
+        'updatedAt': now,
+        // Backward compatible fields for existing dashboards
+        'characterType': script,
+        'masteryLevel': scorePercent,
+        'practiceCount': 1,
+        'lastPracticed': now,
+      };
+
+      // Update only the specific character node (upsert)
+      await _database
+          .child('users')
+          .child(user.uid)
+          .child('characterProgress')
+          .child(characterId)
+          .update(payload);
+    } catch (e) {
+      print('Error setting character mark: $e');
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> fetchCharacterMarks() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return {};
+      final snapshot =
+          await _database.child('users').child(user.uid).child('characterProgress').get();
+      if (!snapshot.exists) return {};
+      final map = Map<String, dynamic>.from(snapshot.value as Map);
+      return map;
+    } catch (e) {
+      print('Error fetching character marks: $e');
+      return {};
+    }
+  }
+
+  Stream<Map<String, dynamic>> watchCharacterMarks() {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return const Stream.empty();
+    }
+    return _database
+        .child('users')
+        .child(user.uid)
+        .child('characterProgress')
+        .onValue
+        .map((event) {
+      if (!event.snapshot.exists) return <String, dynamic>{};
+      return Map<String, dynamic>.from(event.snapshot.value as Map);
+    });
+  }
 
   // Force sync all queued operations
   Future<void> forceSync() async {
@@ -1431,13 +1657,27 @@ class FirebaseUserSyncService {
   void _setupRealtimeListeners() {
     try {
       final user = _auth.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        print('No authenticated user - skipping listener setup');
+        return;
+      }
+
+      // Check if we already have listeners for this user
+      if (_currentListenerUid == user.uid) {
+        print('Listeners already set up for user: ${user.uid}');
+        return;
+      }
+
+      // Clear any existing listeners first
+      clearUserData();
+
+      print('Setting up Firebase listeners for user: ${user.uid}');
 
       // Listen to user data changes
-      _database.child('users').child(user.uid).onValue.listen((event) {
+      _userDataListener = _database.child('users').child(user.uid).onValue.listen((event) {
         if (event.snapshot.exists) {
           final userData = event.snapshot.value as Map<dynamic, dynamic>;
-          print('Real-time user data update received');
+          print('Real-time user data update received for user: ${user.uid}');
 
           // Update local cache
           _cachedUserData = Map<String, dynamic>.from(userData);
@@ -1449,10 +1689,10 @@ class FirebaseUserSyncService {
       });
 
       // Listen to leaderboard changes
-      _database.child('leaderboard').child(user.uid).onValue.listen((event) {
+      _leaderboardListener = _database.child('leaderboard').child(user.uid).onValue.listen((event) {
         if (event.snapshot.exists) {
           final leaderboardData = event.snapshot.value as Map<dynamic, dynamic>;
-          print('Real-time leaderboard update received');
+          print('Real-time leaderboard update received for user: ${user.uid}');
 
           // Update local cache
           _cachedLeaderboardData = [Map<String, dynamic>.from(leaderboardData)];
@@ -1463,7 +1703,9 @@ class FirebaseUserSyncService {
         }
       });
 
-      print('Real-time Firebase listeners set up successfully');
+      // Track current user for listeners
+      _currentListenerUid = user.uid;
+      print('Real-time Firebase listeners set up successfully for user: ${user.uid}');
     } catch (e) {
       print('Error setting up real-time listeners: $e');
     }
@@ -1883,5 +2125,7 @@ class FirebaseUserSyncService {
   // Dispose resources
   void dispose() {
     _syncTimer?.cancel();
+    _userDataListener?.cancel();
+    _leaderboardListener?.cancel();
   }
 }

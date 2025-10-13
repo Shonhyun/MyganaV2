@@ -39,33 +39,6 @@ class AdminLevelsScreen extends StatelessWidget {
     final isDesktop = screenWidth > 900;
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('Level Management'),
-        backgroundColor: Colors.transparent,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.blue[600]!,
-                Colors.blue[700]!,
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.blue.withOpacity(0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-        ),
-      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -85,7 +58,7 @@ class AdminLevelsScreen extends StatelessWidget {
           ),
           child: ListView.builder(
             padding: EdgeInsets.only(
-              top: isDesktop ? 120 : isTablet ? 100 : 80,
+              top: isDesktop ? 40 : isTablet ? 28 : 16,
               bottom: isDesktop ? 32 : isTablet ? 24 : 16,
             ),
             itemCount: levels.length + 1, // +1 for the header

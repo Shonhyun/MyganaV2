@@ -72,14 +72,18 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         return;
       }
 
-      debugPrint('User found: ${user.uid}, checking admin status');
-      final isAdmin = await _authService.isAdmin();
-      if (isAdmin) {
-        debugPrint('User is admin, navigating to admin screen');
-        if (mounted) {
-          Navigator.of(context).pushReplacementNamed('/admin');
+      debugPrint('User found: ${user.uid}, resolving role');
+      final role = await _authService.getUserRole();
+      debugPrint('Resolved role: $role');
+      if (mounted) {
+        if (role == 'super_admin') {
+          Navigator.of(context).pushReplacementNamed('/super_admin');
+          return;
         }
-        return;
+        if (await _authService.isTeacher()) {
+          Navigator.of(context).pushReplacementNamed('/admin');
+          return;
+        }
       }
 
       debugPrint('Checking profile completion status');

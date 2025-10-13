@@ -1,11 +1,12 @@
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nihongo_japanese_app/models/challenge_topic.dart';
-import 'package:nihongo_japanese_app/models/user_model.dart';
+import 'package:nihongo_japanese_app/models/user_model.dart' as UserModel;
 import 'package:nihongo_japanese_app/screens/challenge_screen.dart';
 import 'package:nihongo_japanese_app/screens/challenge_topic_screen.dart' hide ChallengeTopic;
 import 'package:nihongo_japanese_app/screens/difficulty_selection_screen.dart';
@@ -20,10 +21,12 @@ import 'package:nihongo_japanese_app/services/challenge_progress_service.dart';
 import 'package:nihongo_japanese_app/services/coin_service.dart';
 import 'package:nihongo_japanese_app/services/daily_points_service.dart';
 import 'package:nihongo_japanese_app/services/database_service.dart';
+import 'package:nihongo_japanese_app/services/firebase_user_sync_service.dart';
 import 'package:nihongo_japanese_app/services/profile_image_service.dart';
 import 'package:nihongo_japanese_app/services/progress_service.dart';
 import 'package:nihongo_japanese_app/services/review_progress_service.dart';
 import 'package:nihongo_japanese_app/services/streak_analytics_service.dart';
+import 'package:nihongo_japanese_app/utils/character_constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -421,7 +424,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildWelcomeMessage(BuildContext context) {
-    return FutureBuilder<User>(
+    return FutureBuilder<UserModel.User>(
       future: _getUserData(),
       builder: (context, snapshot) {
         String userName = 'there';
@@ -506,14 +509,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Future<User> _getUserData() async {
+  Future<UserModel.User> _getUserData() async {
     final prefs = await SharedPreferences.getInstance();
     final firstName = prefs.getString('first_name') ?? '';
     final lastName = prefs.getString('last_name') ?? '';
     final gender = prefs.getString('gender') ?? '';
     final isProfileComplete = prefs.getBool('has_completed_profile') ?? false;
 
-    return User(
+    return UserModel.User(
       firstName: firstName,
       lastName: lastName,
       gender: gender,
@@ -1713,11 +1716,50 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Future<String> _getOverallMastery() async {
     try {
-      final progressService = ProgressService();
-      await progressService.initialize();
-      final mastery = progressService.getOverallMasteryLevel();
-      return '${(mastery * 100).toStringAsFixed(1)}%';
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return '0%';
+      
+      final firebaseSync = FirebaseUserSyncService();
+      final userData = await firebaseSync.getRealtimeUserData();
+      
+      if (userData == null || userData.isEmpty) return '0%';
+      
+      final characterProgressData = userData['characterProgress'];
+      if (characterProgressData == null || characterProgressData is! Map) {
+        return '0%';
+      }
+      
+      final characterProgress = Map<String, dynamic>.from(characterProgressData);
+      int completedCharacters = 0;
+      int totalCharacters = 0;
+      
+      // Count all characters (Hiragana + Katakana + Kanji)
+      totalCharacters = CharacterConstants.totalCharacters;
+      
+      for (final entry in characterProgress.entries) {
+        try {
+          final progressData = entry.value;
+          if (progressData is! Map) continue;
+          
+          final progress = Map<String, dynamic>.from(progressData);
+          final masteryLevel = progress['masteryLevel'];
+          final masteryValue = masteryLevel is int ? masteryLevel : 
+                              masteryLevel is double ? masteryLevel.toInt() : 0;
+          
+          if (masteryValue >= CharacterConstants.masteryThreshold) {
+            completedCharacters++;
+          }
+        } catch (e) {
+          print('Error parsing character progress for ${entry.key}: $e');
+          continue;
+        }
+      }
+      
+      if (totalCharacters == 0) return '0%';
+      final percentage = (completedCharacters / totalCharacters * 100).clamp(0.0, 100.0);
+      return '${percentage.toStringAsFixed(1)}%';
     } catch (e) {
+      print('Error getting overall mastery: $e');
       return '0%';
     }
   }

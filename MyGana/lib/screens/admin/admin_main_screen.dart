@@ -6,37 +6,18 @@ import 'package:provider/provider.dart';
 import 'admin_levels_screen.dart';
 import 'admin_quiz_management_screen.dart';
 import 'admin_class_list_screen.dart';
+import 'admin_leaderboard_screen.dart';
 
-class AdminMainScreen extends StatelessWidget {
+class AdminMainScreen extends StatefulWidget {
   const AdminMainScreen({super.key});
 
-  // Get theme icon for display
-  IconData _getThemeIcon(AppThemeMode mode) {
-    switch (mode) {
-      case AppThemeMode.system:
-        return Icons.phone_android;
-      case AppThemeMode.light:
-        return Icons.light_mode;
-      case AppThemeMode.dark:
-        return Icons.dark_mode;
-      case AppThemeMode.sakura:
-        return Icons.local_florist;
-      case AppThemeMode.matcha:
-        return Icons.eco;
-      case AppThemeMode.sunset:
-        return Icons.wb_sunny;
-      case AppThemeMode.ocean:
-        return Icons.water;
-      case AppThemeMode.lavender:
-        return Icons.spa;
-      case AppThemeMode.autumn:
-        return Icons.park;
-      case AppThemeMode.fuji:
-        return Icons.landscape;
-      case AppThemeMode.blueLight:
-        return Icons.blur_on;
-    }
-  }
+  @override
+  State<AdminMainScreen> createState() => _AdminMainScreenState();
+}
+
+class _AdminMainScreenState extends State<AdminMainScreen> {
+  int _currentIndex = 0;
+
 
   // Add logout function
   Future<void> _logout(BuildContext context) async {
@@ -90,639 +71,177 @@ class AdminMainScreen extends StatelessWidget {
     final isTablet = screenWidth > 600;
     final isDesktop = screenWidth > 900;
 
+    final pages = <Widget>[
+      const AdminLevelsScreen(),
+      const AdminQuizManagementScreen(),
+      const AdminClassListScreen(),
+      const AdminLeaderboardScreen(),
+      _AdminSettingsView(onLogout: () => _logout(context)),
+    ];
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin Panel'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-        elevation: 0,
-        centerTitle: true,
-        actions: [
-          // Add theme switcher button
-          Consumer<ThemeProvider>(
-            builder: (context, themeProvider, child) {
-              return PopupMenuButton<AppThemeMode>(
-                icon: const Icon(Icons.palette),
-                tooltip: 'Change Theme',
-                onSelected: (AppThemeMode theme) {
-                  themeProvider.setAppTheme(theme);
-                },
-                itemBuilder: (BuildContext context) {
-                  return AppThemeMode.values.map((AppThemeMode theme) {
-                    return PopupMenuItem<AppThemeMode>(
-                      value: theme,
-                      child: Row(
-                        children: [
-                          Icon(
-                            _getThemeIcon(theme),
-                            color: themeProvider.appThemeMode == theme
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.onSurface,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            themeProvider.getThemeName(theme),
-                            style: TextStyle(
-                              color: themeProvider.appThemeMode == theme
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.onSurface,
-                              fontWeight: themeProvider.appThemeMode == theme
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList();
-                },
-              );
-            },
+      body: SafeArea(
+        top: true,
+        bottom: false,
+        child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+          child: Container(
+            key: ValueKey(_currentIndex),
+            width: double.infinity,
+            constraints: const BoxConstraints(maxWidth: 1200),
+            margin: EdgeInsets.symmetric(
+              horizontal: isDesktop
+                  ? 32
+                  : isTablet
+                      ? 24
+                      : 0,
+            ),
+            child: pages[_currentIndex],
           ),
-          // Add logout button to AppBar
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-            onPressed: () => _logout(context),
-          ),
-        ],
-      ),
-      body: Container(
-        width: double.infinity,
-        constraints: const BoxConstraints(maxWidth: 1200),
-        margin: EdgeInsets.symmetric(
-          horizontal: isDesktop
-              ? 32
-              : isTablet
-                  ? 24
-                  : 16,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Class Management Card
-            Container(
-              margin: EdgeInsets.only(
-                  bottom: isDesktop
-                      ? 32
-                      : isTablet
-                          ? 24
-                          : 16),
-              child: Hero(
-                tag: 'admin_class_management_card',
-                child: Material(
-                  child: Card(
-                    elevation: 6,
-                    shadowColor: Theme.of(context).colorScheme.tertiary.withOpacity(0.3),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const AdminClassListScreen(),
-                          ),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: EdgeInsets.all(isDesktop
-                            ? 28
-                            : isTablet
-                                ? 24
-                                : 20),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(isDesktop
-                                  ? 20
-                                  : isTablet
-                                      ? 16
-                                      : 12),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.tertiary.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: Theme.of(context).colorScheme.tertiary.withOpacity(0.2),
-                                  width: 2,
-                                ),
-                              ),
-                              child: Icon(
-                                Icons.class_,
-                                color: Theme.of(context).colorScheme.tertiary,
-                                size: isDesktop
-                                    ? 40
-                                    : isTablet
-                                        ? 36
-                                        : 32,
-                              ),
-                            ),
-                            SizedBox(
-                                width: isDesktop
-                                    ? 24
-                                    : isTablet
-                                        ? 20
-                                        : 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Class Management',
-                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: isDesktop
-                                              ? 28
-                                              : isTablet
-                                                  ? 24
-                                                  : 20,
-                                          color: Theme.of(context).colorScheme.tertiary,
-                                        ),
-                                  ),
-                                  SizedBox(
-                                      height: isDesktop
-                                          ? 12
-                                          : isTablet
-                                              ? 10
-                                              : 8),
-                                  Text(
-                                    'Create classes and monitor students',
-                                    style: TextStyle(
-                                      color: Theme.of(context)
-                                          .textTheme
-                                          .bodyLarge
-                                          ?.color
-                                          ?.withOpacity(0.7),
-                                      fontSize: isDesktop
-                                          ? 16
-                                          : isTablet
-                                              ? 14
-                                              : 12,
-                                    ),
-                                  ),
-                                  SizedBox(
-                                      height: isDesktop
-                                          ? 16
-                                          : isTablet
-                                              ? 12
-                                              : 8),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.arrow_forward,
-                                        color: Theme.of(context).colorScheme.tertiary,
-                                        size: isDesktop
-                                            ? 24
-                                            : isTablet
-                                                ? 20
-                                                : 18,
-                                      ),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'Tap to manage',
-                                        style: TextStyle(
-                                          color: Theme.of(context).colorScheme.tertiary,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: isDesktop
-                                              ? 16
-                                              : isTablet
-                                                  ? 14
-                                                  : 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              Icons.arrow_forward_ios,
-                              color: Theme.of(context).colorScheme.tertiary,
-                              size: isDesktop
-                                  ? 28
-                                  : isTablet
-                                      ? 24
-                                      : 20,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Container(
-              margin: EdgeInsets.only(
-                top: isDesktop
-                    ? 32
-                    : isTablet
-                        ? 24
-                        : 16,
-                bottom: isDesktop
-                    ? 40
-                    : isTablet
-                        ? 32
-                        : 24,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Welcome to Admin Panel',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          fontSize: isDesktop
-                              ? 32
-                              : isTablet
-                                  ? 28
-                                  : 24,
-                        ),
-                  ),
-                  SizedBox(
-                      height: isDesktop
-                          ? 12
-                          : isTablet
-                              ? 10
-                              : 8),
-                  Text(
-                    'Manage your Japanese learning content',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Colors.grey[600],
-                          fontSize: isDesktop
-                              ? 18
-                              : isTablet
-                                  ? 16
-                                  : 14,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Lesson Management Card
-            Container(
-              margin: EdgeInsets.only(
-                  bottom: isDesktop
-                      ? 32
-                      : isTablet
-                          ? 24
-                          : 16),
-              child: Hero(
-                tag: 'admin_lesson_management_card',
-                child: Material(
-                  child: Card(
-                    elevation: 6,
-                    shadowColor: Colors.blue.withOpacity(0.3),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const AdminLevelsScreen(),
-                          ),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: EdgeInsets.all(isDesktop
-                            ? 28
-                            : isTablet
-                                ? 24
-                                : 20),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(isDesktop
-                                  ? 20
-                                  : isTablet
-                                      ? 16
-                                      : 12),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-                                  width: 2,
-                                ),
-                              ),
-                              child: Icon(
-                                Icons.school,
-                                color: Theme.of(context).colorScheme.primary,
-                                size: isDesktop
-                                    ? 40
-                                    : isTablet
-                                        ? 36
-                                        : 32,
-                              ),
-                            ),
-                            SizedBox(
-                                width: isDesktop
-                                    ? 24
-                                    : isTablet
-                                        ? 20
-                                        : 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Lesson Management',
-                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: isDesktop
-                                              ? 28
-                                              : isTablet
-                                                  ? 24
-                                                  : 20,
-                                          color: Theme.of(context).colorScheme.primary,
-                                        ),
-                                  ),
-                                  SizedBox(
-                                      height: isDesktop
-                                          ? 12
-                                          : isTablet
-                                              ? 10
-                                              : 8),
-                                  Text(
-                                    'Manage levels, categories, lessons, and content',
-                                    style: TextStyle(
-                                      color: Theme.of(context)
-                                          .textTheme
-                                          .bodyLarge
-                                          ?.color
-                                          ?.withOpacity(0.7),
-                                      fontSize: isDesktop
-                                          ? 16
-                                          : isTablet
-                                              ? 14
-                                              : 12,
-                                    ),
-                                  ),
-                                  SizedBox(
-                                      height: isDesktop
-                                          ? 16
-                                          : isTablet
-                                              ? 12
-                                              : 8),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.arrow_forward,
-                                        color: Theme.of(context).colorScheme.primary,
-                                        size: isDesktop
-                                            ? 24
-                                            : isTablet
-                                                ? 20
-                                                : 18,
-                                      ),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'Tap to manage',
-                                        style: TextStyle(
-                                          color: Theme.of(context).colorScheme.primary,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: isDesktop
-                                              ? 16
-                                              : isTablet
-                                                  ? 14
-                                                  : 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              Icons.arrow_forward_ios,
-                              color: Theme.of(context).colorScheme.primary,
-                              size: isDesktop
-                                  ? 28
-                                  : isTablet
-                                      ? 24
-                                      : 20,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            // Quiz Management Card
-            Container(
-              margin: EdgeInsets.only(
-                  bottom: isDesktop
-                      ? 32
-                      : isTablet
-                          ? 24
-                          : 16),
-              child: Hero(
-                tag: 'admin_quiz_management_card',
-                child: Material(
-                  child: Card(
-                    elevation: 6,
-                    shadowColor: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const AdminQuizManagementScreen(),
-                          ),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: EdgeInsets.all(isDesktop
-                            ? 28
-                            : isTablet
-                                ? 24
-                                : 20),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(isDesktop
-                                  ? 20
-                                  : isTablet
-                                      ? 16
-                                      : 12),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.secondary.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: Theme.of(context).colorScheme.secondary.withOpacity(0.2),
-                                  width: 2,
-                                ),
-                              ),
-                              child: Icon(
-                                Icons.quiz,
-                                color: Theme.of(context).colorScheme.secondary,
-                                size: isDesktop
-                                    ? 40
-                                    : isTablet
-                                        ? 36
-                                        : 32,
-                              ),
-                            ),
-                            SizedBox(
-                                width: isDesktop
-                                    ? 24
-                                    : isTablet
-                                        ? 20
-                                        : 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Quiz Management',
-                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: isDesktop
-                                              ? 28
-                                              : isTablet
-                                                  ? 24
-                                                  : 20,
-                                          color: Theme.of(context).colorScheme.secondary,
-                                        ),
-                                  ),
-                                  SizedBox(
-                                      height: isDesktop
-                                          ? 12
-                                          : isTablet
-                                              ? 10
-                                              : 8),
-                                  Text(
-                                    'Create and manage quizzes for students',
-                                    style: TextStyle(
-                                      color: Theme.of(context)
-                                          .textTheme
-                                          .bodyLarge
-                                          ?.color
-                                          ?.withOpacity(0.7),
-                                      fontSize: isDesktop
-                                          ? 16
-                                          : isTablet
-                                              ? 14
-                                              : 12,
-                                    ),
-                                  ),
-                                  SizedBox(
-                                      height: isDesktop
-                                          ? 16
-                                          : isTablet
-                                              ? 12
-                                              : 8),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.arrow_forward,
-                                        color: Theme.of(context).colorScheme.secondary,
-                                        size: isDesktop
-                                            ? 24
-                                            : isTablet
-                                                ? 20
-                                                : 18,
-                                      ),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'Tap to manage',
-                                        style: TextStyle(
-                                          color: Theme.of(context).colorScheme.secondary,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: isDesktop
-                                              ? 14
-                                              : isTablet
-                                                  ? 12
-                                                  : 10,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Icon(
-                              Icons.arrow_forward_ios,
-                              color: Theme.of(context).colorScheme.secondary,
-                              size: isDesktop
-                                  ? 28
-                                  : isTablet
-                                      ? 24
-                                      : 20,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            // Logout Button
-            const Spacer(),
-            Container(
-              margin: EdgeInsets.only(
-                  bottom: isDesktop
-                      ? 32
-                      : isTablet
-                          ? 24
-                          : 16),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => _logout(context),
-                  icon: Icon(
-                    Icons.logout,
-                    size: isDesktop
-                        ? 24
-                        : isTablet
-                            ? 22
-                            : 20,
-                  ),
-                  label: Text(
-                    'Logout',
-                    style: TextStyle(
-                      fontSize: isDesktop
-                          ? 18
-                          : isTablet
-                              ? 16
-                              : 14,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                    padding: EdgeInsets.symmetric(
-                      vertical: isDesktop
-                          ? 20
-                          : isTablet
-                              ? 18
-                              : 16,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
+      ),
+      bottomNavigationBar: Container
+        (
+                decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface.withOpacity(0.95),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, -2),
             ),
           ],
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(16),
+            topRight: Radius.circular(16),
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            currentIndex: _currentIndex,
+            onTap: (i) => setState(() => _currentIndex = i),
+            showSelectedLabels: true,
+            showUnselectedLabels: true,
+            selectedItemColor: Theme.of(context).colorScheme.primary,
+            unselectedItemColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+            selectedFontSize: 11,
+            unselectedFontSize: 11,
+            selectedIconTheme: const IconThemeData(size: 24),
+            unselectedIconTheme: const IconThemeData(size: 22),
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.school_outlined),
+                activeIcon: Icon(Icons.school),
+                label: 'Lessons',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.quiz_outlined),
+                activeIcon: Icon(Icons.quiz),
+                label: 'Quizzes',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.group_outlined),
+                activeIcon: Icon(Icons.group),
+                label: 'Classes',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.emoji_events_outlined),
+                activeIcon: Icon(Icons.emoji_events),
+                label: 'Leaderboard',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.settings_outlined),
+                activeIcon: Icon(Icons.settings),
+                label: 'Settings',
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
+
+class _AdminSettingsView extends StatelessWidget {
+  final VoidCallback onLogout;
+  const _AdminSettingsView({required this.onLogout});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                        children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Settings',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              Consumer<ThemeProvider>(
+                builder: (context, themeProvider, child) {
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Dark Mode',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                      Switch(
+                        value: themeProvider.themeMode == ThemeMode.dark,
+                        onChanged: (v) {
+                          themeProvider.setAppTheme(v ? AppThemeMode.dark : AppThemeMode.light);
+                        },
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton.icon(
+          onPressed: onLogout,
+          icon: const Icon(Icons.logout),
+          label: const Text('Logout'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        const SizedBox(height: 32),
+        Opacity(
+          opacity: 0.6,
+          child: Text(
+            'Admin app v1.0.0',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+      ],
+    );
+  }
+}        

@@ -24,7 +24,7 @@ class UserProgress {
     characterProgress.forEach((char, progress) {
       if (progress.characterType == characterType) {
         totalCharacters++;
-        if (progress.masteryLevel >= 80) {
+        if (progress.masteryLevel >= 70) {
           masteredCharacters++;
         }
       }
@@ -39,7 +39,7 @@ class UserProgress {
     
     int totalCharacters = characterProgress.length;
     int masteredCharacters = characterProgress.values
-        .where((progress) => progress.masteryLevel >= 80)
+        .where((progress) => progress.masteryLevel >= 70)
         .length;
     
     return masteredCharacters / totalCharacters;

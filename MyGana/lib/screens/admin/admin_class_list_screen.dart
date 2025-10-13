@@ -17,9 +17,6 @@ class _AdminClassListScreenState extends State<AdminClassListScreen> {
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Classes'),
-      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showCreateClassDialog,
         child: const Icon(Icons.add),
