@@ -104,6 +104,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
 
   // Audio players
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioPlayer _bgmPlayer = AudioPlayer(); // NEW: BGM player for interactions
   final AudioPlayer _transitionSoundPlayer = AudioPlayer();
   final AudioPlayer _correctSoundPlayer = AudioPlayer();
   final AudioPlayer _incorrectSoundPlayer = AudioPlayer();
@@ -302,6 +303,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     _victoryMusicPlayer.dispose();
     _heartLostSoundPlayer.dispose();
     _characterSoundPlayer.dispose(); // NEW
+    _bgmPlayer.dispose(); // NEW: BGM player
     // Add this in dispose()
     _floatingMessageController.dispose();
     super.dispose();
@@ -406,6 +408,52 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     }
   }
 
+  // NEW: Play BGM for interactions
+  Future<void> _playBGM(String bgmFile) async {
+    try {
+      print('DEBUG: ===== BGM DEBUG =====');
+      print('DEBUG: Attempting to play BGM: $bgmFile');
+      print('DEBUG: BGM player state: ${_bgmPlayer.processingState}');
+      
+      // Stop any currently playing BGM on this player
+      await _bgmPlayer.stop();
+      print('DEBUG: Stopped any existing BGM');
+      
+      // Set the asset
+      await _bgmPlayer.setAsset(bgmFile);
+      print('DEBUG: BGM asset set successfully');
+      
+      // Set volume (lower so it doesn't overpower other sounds)
+      await _bgmPlayer.setVolume(0.4);
+      print('DEBUG: BGM volume set to 0.4');
+      
+      // Set loop mode for continuous playback
+      await _bgmPlayer.setLoopMode(LoopMode.all);
+      print('DEBUG: BGM loop mode set to all');
+      
+      // Play the BGM
+      await _bgmPlayer.play();
+      print('DEBUG: BGM playing successfully');
+      print('DEBUG: ===== END BGM DEBUG =====');
+    } catch (e) {
+      print('ERROR: ===== BGM ERROR =====');
+      print('ERROR: Failed to play BGM: $e');
+      print('ERROR: BGM file: $bgmFile');
+      print('ERROR: ===== END BGM ERROR =====');
+    }
+  }
+
+  // NEW: Stop BGM
+  Future<void> _stopBGM() async {
+    try {
+      print('DEBUG: Stopping BGM');
+      await _bgmPlayer.stop();
+      print('DEBUG: BGM stopped');
+    } catch (e) {
+      print('ERROR: Error stopping BGM: $e');
+    }
+  }
+
   Future<void> _playVictoryMusic() async {
     try {
       await _audioPlayer.stop();
@@ -418,8 +466,8 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
 
   Future<void> _initBackgroundMusic() async {
     try {
-      await _audioPlayer.setVolume(0.5);
-      await _audioPlayer.setAsset('assets/sounds/bgmds.mp3');
+      await _audioPlayer.setVolume(0.2);
+      await _audioPlayer.setAsset('assets/sounds/bgmNew.mp3');
       await _audioPlayer.setLoopMode(LoopMode.all);
       await _audioPlayer.play();
     } catch (e) {
@@ -928,6 +976,8 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     _calculateFinalScore();
     _saveStoryScore(); // Save the score to local storage
     _playVictoryMusic();
+    // Mark difficulty as completed
+    DifficultyCompletionTracker.markDifficultyCompleted(widget.difficulty);
     setState(() {
       _showingCompletionScreen = true;
     });
@@ -2554,6 +2604,18 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     if (beat.soundFile != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _playCharacterSound(beat.soundFile!);
+      });
+    }
+    
+    // Play BGM immediately when dialog appears (text animation starts)
+    if (beat.bgmFile != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _playBGM(beat.bgmFile!);
+      });
+    } else {
+      // Stop BGM if this beat doesn't have bgmFile
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _stopBGM();
       });
     }
     

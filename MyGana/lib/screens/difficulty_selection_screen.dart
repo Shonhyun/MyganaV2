@@ -1,10 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'story_screen.dart';
 
 enum Difficulty {
   EASY,
   NORMAL,
   HARD,
+}
+
+// Utility class for difficulty completion tracking
+class DifficultyCompletionTracker {
+  static Future<void> markDifficultyCompleted(Difficulty difficulty) async {
+    final prefs = await SharedPreferences.getInstance();
+    String key = 'difficulty_${difficulty.toString().split('.').last.toLowerCase()}_completed';
+    await prefs.setBool(key, true);
+  }
+
+  static Future<bool> isDifficultyCompleted(Difficulty difficulty) async {
+    final prefs = await SharedPreferences.getInstance();
+    String key = 'difficulty_${difficulty.toString().split('.').last.toLowerCase()}_completed';
+    return prefs.getBool(key) ?? false;
+  }
 }
 
 class DifficultySelectionScreen extends StatefulWidget {
@@ -15,10 +31,16 @@ class DifficultySelectionScreen extends StatefulWidget {
 }
 
 class _DifficultySelectionScreenState extends State<DifficultySelectionScreen> {
+  Map<Difficulty, bool> _completionStatus = {
+    Difficulty.EASY: false,
+    Difficulty.NORMAL: false,
+    Difficulty.HARD: false,
+  };
+
   @override
   void initState() {
     super.initState();
-    // Allow flexible orientation - no forced constraints
+    _loadCompletionStatus();
   }
 
   @override
@@ -26,13 +48,28 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen> {
     super.dispose();
   }
 
-  void _selectDifficulty(Difficulty difficulty) {
-    Navigator.push(
+  // Load completion status from SharedPreferences
+  Future<void> _loadCompletionStatus() async {
+    final easyCompleted = await DifficultyCompletionTracker.isDifficultyCompleted(Difficulty.EASY);
+    final normalCompleted = await DifficultyCompletionTracker.isDifficultyCompleted(Difficulty.NORMAL);
+    final hardCompleted = await DifficultyCompletionTracker.isDifficultyCompleted(Difficulty.HARD);
+    
+    setState(() {
+      _completionStatus[Difficulty.EASY] = easyCompleted;
+      _completionStatus[Difficulty.NORMAL] = normalCompleted;
+      _completionStatus[Difficulty.HARD] = hardCompleted;
+    });
+  }
+
+  void _selectDifficulty(Difficulty difficulty) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => StoryScreen(difficulty: difficulty),
       ),
     );
+    // Refresh completion status when returning from story screen
+    _loadCompletionStatus();
   }
 
   void _showGameOverview() {
@@ -304,6 +341,7 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen> {
     final screenSize = MediaQuery.of(context).size;
     final isLandscape = screenSize.width > screenSize.height;
     String difficultyText = difficulty.toString().split('.').last;
+    bool isCompleted = _completionStatus[difficulty] ?? false;
     
     return Container(
       width: isLandscape 
@@ -319,42 +357,85 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen> {
           ),
         ],
       ),
-      child: ElevatedButton(
-        onPressed: () => _selectDifficulty(difficulty),
-        style: ElevatedButton.styleFrom(
-          padding: EdgeInsets.symmetric(
-            vertical: isLandscape ? 16 : 20,
-            horizontal: isLandscape ? 8 : 16,
-          ),
-          backgroundColor: color.withOpacity(0.8),
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: color, width: 2),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              difficultyText,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: isLandscape ? 14 : 18,
-                fontFamily: "TheLastShuriken"
+      child: Stack(
+        children: [
+          ElevatedButton(
+            onPressed: () => _selectDifficulty(difficulty),
+            style: ElevatedButton.styleFrom(
+              padding: EdgeInsets.symmetric(
+                vertical: isLandscape ? 16 : 20,
+                horizontal: isLandscape ? 8 : 16,
+              ),
+              backgroundColor: isCompleted 
+                ? color.withOpacity(0.6) 
+                : color.withOpacity(0.8),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: isCompleted ? Colors.amber : color, 
+                  width: isCompleted ? 3 : 2,
+                ),
               ),
             ),
-            SizedBox(height: isLandscape ? 6 : 8),
-            Text(
-              description,
-              style: TextStyle(
-                fontSize: isLandscape ? 12 : 14,
-                fontStyle: FontStyle.italic,
-              ),
-              textAlign: TextAlign.center,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      difficultyText,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: isLandscape ? 14 : 18,
+                        fontFamily: "TheLastShuriken"
+                      ),
+                    ),
+                    if (isCompleted) ...[
+                      SizedBox(width: 8),
+                      Icon(
+                        Icons.check_circle,
+                        color: Colors.amber,
+                        size: isLandscape ? 16 : 20,
+                      ),
+                    ],
+                  ],
+                ),
+                SizedBox(height: isLandscape ? 6 : 8),
+                Text(
+                  isCompleted ? 'Completed!' : description,
+                  style: TextStyle(
+                    fontSize: isLandscape ? 12 : 14,
+                    fontStyle: isCompleted ? FontStyle.normal : FontStyle.italic,
+                    fontWeight: isCompleted ? FontWeight.bold : FontWeight.normal,
+                    color: isCompleted ? Colors.amber : Colors.white,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          // Completion badge overlay
+          if (isCompleted)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                padding: EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.amber,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1),
+                ),
+                child: Icon(
+                  Icons.star,
+                  color: Colors.white,
+                  size: isLandscape ? 12 : 16,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
