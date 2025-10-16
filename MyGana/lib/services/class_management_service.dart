@@ -221,6 +221,78 @@ class ClassManagementService {
     if (lastName.isNotEmpty) return lastName;
     return 'Student';
   }
+
+  // Delete student account and remove from class
+  Future<void> deleteStudentAccount(String classId, String studentId) async {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('Not authenticated');
+
+    // Verify admin permissions
+    final classSnap = await _db.child('classes').child(classId).get();
+    if (!classSnap.exists) throw Exception('Class not found');
+    
+    final classData = Map<String, dynamic>.from(classSnap.value as Map);
+    if (classData['adminId'] != user.uid) {
+      throw Exception('Not authorized to delete students from this class');
+    }
+
+    // First, remove student from class (without touching user data)
+    final classUpdates = <String, dynamic>{};
+    classUpdates['classMembers/$classId/$studentId'] = null;
+    classUpdates['userClasses/$studentId/$classId'] = null;
+    
+    await _db.update(classUpdates);
+
+    // Then delete user data separately to avoid path conflicts
+    final userUpdates = <String, dynamic>{};
+    userUpdates['users/$studentId'] = null;
+    userUpdates['userProgress/$studentId'] = null;
+    userUpdates['characterProgress/$studentId'] = null;
+    userUpdates['quizResults/$studentId'] = null;
+    userUpdates['storyProgress/$studentId'] = null;
+
+    await _db.update(userUpdates);
+  }
+
+  // Get top student in class based on total points
+  Future<StudentProgressSummary?> getTopStudent(String classId) async {
+    final students = await watchClassMembersWithStats(classId).first;
+    if (students.isEmpty) return null;
+
+    StudentProgressSummary? topStudent;
+    int maxPoints = -1;
+
+    for (final student in students) {
+      final stats = student.userStatistics;
+      final totalPoints = (stats['totalPoints'] is int) ? stats['totalPoints'] as int : 
+                         (stats['totalPoints'] is double) ? (stats['totalPoints'] as double).toInt() : 0;
+      
+      if (totalPoints > maxPoints) {
+        maxPoints = totalPoints;
+        topStudent = student;
+      }
+    }
+
+    return topStudent;
+  }
+
+  // Get top 10 students in class based on total points
+  Future<List<StudentProgressSummary>> getTop10Students(String classId) async {
+    final students = await watchClassMembersWithStats(classId).first;
+    if (students.isEmpty) return [];
+
+    // Sort students by total points (descending)
+    students.sort((a, b) {
+      final aPoints = (a.userStatistics['totalPoints'] is int) ? a.userStatistics['totalPoints'] as int : 
+                     (a.userStatistics['totalPoints'] is double) ? (a.userStatistics['totalPoints'] as double).toInt() : 0;
+      final bPoints = (b.userStatistics['totalPoints'] is int) ? b.userStatistics['totalPoints'] as int : 
+                     (b.userStatistics['totalPoints'] is double) ? (b.userStatistics['totalPoints'] as double).toInt() : 0;
+      return bPoints.compareTo(aPoints);
+    });
+
+    // Return top 10 (or all if less than 10)
+    return students.take(10).toList();
+  }
 }
 
 

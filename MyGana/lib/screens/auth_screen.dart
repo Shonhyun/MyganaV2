@@ -97,14 +97,17 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
           throw Exception('Authentication failed: No user found');
         }
 
-        debugPrint('Checking admin status for user: ${user.uid}');
-        bool isAdmin = await _authService.isAdmin();
-        if (isAdmin) {
-          debugPrint('User is admin, navigating to admin screen');
-          if (mounted) {
-            Navigator.pushReplacementNamed(context, '/admin');
+        debugPrint('Resolving role for user: ${user.uid}');
+        final role = await _authService.getUserRole();
+        if (mounted) {
+          if (role == 'super_admin') {
+            Navigator.pushReplacementNamed(context, '/super_admin');
+            return;
           }
-          return;
+          if (await _authService.isTeacher()) {
+            Navigator.pushReplacementNamed(context, '/admin');
+            return;
+          }
         }
 
         debugPrint('Checking profile existence for user: ${user.uid}');

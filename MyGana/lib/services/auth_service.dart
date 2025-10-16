@@ -5,11 +5,16 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:nihongo_japanese_app/services/firebase_user_sync_service.dart';
+import 'package:nihongo_japanese_app/services/progress_service.dart';
+import 'package:nihongo_japanese_app/services/challenge_progress_service.dart';
+import 'package:nihongo_japanese_app/services/coin_service.dart';
+import 'package:nihongo_japanese_app/services/profile_image_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseUserSyncService _firebaseSync = FirebaseUserSyncService();
+  static const String _superAdminEmail = 'superadmin01@gmail.com';
 
   User? get currentUser => _auth.currentUser;
 
@@ -34,24 +39,134 @@ class AuthService {
     }
   }
 
-  // Check if user is admin with better error handling
+  // Backward-compatible: Check if user has teacher-level access (teacher or super admin or legacy isAdmin)
   Future<bool> isAdmin() async {
     if (currentUser == null) {
       debugPrint('No user signed in for admin check');
       return false;
     }
     try {
-      debugPrint('Checking admin status for user: ${currentUser!.uid}');
-      final snapshot =
-          await FirebaseDatabase.instance.ref().child('users/${currentUser!.uid}/isAdmin').get();
+      // Prefer role-based check first
+      final role = await getUserRole();
+      if (role == 'teacher' || role == 'super_admin') {
+        return true;
+      }
 
-      final isAdmin = snapshot.exists && snapshot.value == true;
-      debugPrint(
-          'Admin check result: $isAdmin, snapshot exists: ${snapshot.exists}, value: ${snapshot.value}');
-      return isAdmin;
+      // Fallback to legacy boolean flag
+      final snapshot = await FirebaseDatabase.instance
+          .ref()
+          .child('users/${currentUser!.uid}/isAdmin')
+          .get();
+      final legacyIsAdmin = snapshot.exists && snapshot.value == true;
+      debugPrint('Legacy isAdmin fallback result: $legacyIsAdmin');
+      return legacyIsAdmin;
     } catch (e) {
       debugPrint('Error checking admin status: $e');
       return false;
+    }
+  }
+
+  // Role helpers
+  Future<String?> getUserRole() async {
+    try {
+      if (currentUser == null) return null;
+      final ref = FirebaseDatabase.instance.ref().child('users/${currentUser!.uid}/role');
+      final snapshot = await ref.get();
+
+      if (snapshot.exists) {
+        final role = snapshot.value?.toString();
+        return role;
+      }
+
+      // Infer from legacy fields or email
+      final legacyAdminSnap = await FirebaseDatabase.instance
+          .ref()
+          .child('users/${currentUser!.uid}/isAdmin')
+          .get();
+      final isLegacyAdmin = legacyAdminSnap.exists && legacyAdminSnap.value == true;
+      if (isLegacyAdmin) return 'teacher';
+
+      if ((currentUser!.email ?? '').toLowerCase() == _superAdminEmail) {
+        return 'super_admin';
+      }
+
+      return 'student';
+    } catch (e) {
+      debugPrint('Error getting user role: $e');
+      return null;
+    }
+  }
+
+  Future<bool> isSuperAdmin() async {
+    if (currentUser == null) return false;
+    try {
+      final role = await getUserRole();
+      if (role == 'super_admin') return true;
+      // Fallback based on email
+      return (currentUser!.email ?? '').toLowerCase() == _superAdminEmail;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> isTeacher() async {
+    if (currentUser == null) return false;
+    try {
+      final role = await getUserRole();
+      if (role == 'teacher') return true;
+      // Accept super admin as having teacher access
+      if (role == 'super_admin') return true;
+      // Fallback to legacy flag
+      final snapshot = await FirebaseDatabase.instance
+          .ref()
+          .child('users/${currentUser!.uid}/isAdmin')
+          .get();
+      return snapshot.exists && snapshot.value == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _ensureRoleConsistencyAfterLogin() async {
+    if (currentUser == null) return;
+    try {
+      final userRef = FirebaseDatabase.instance.ref().child('users/${currentUser!.uid}');
+      final userSnap = await userRef.get();
+      Map<String, dynamic> existing = {};
+      if (userSnap.exists && userSnap.value is Map) {
+        existing = Map<String, dynamic>.from(userSnap.value as Map);
+      }
+
+      String? role = existing['role']?.toString();
+      final email = (currentUser!.email ?? '').toLowerCase();
+
+      // Promote special email to super_admin if missing
+      if (email == _superAdminEmail) {
+        role = 'super_admin';
+        existing['isAdmin'] = true; // keep legacy compatible
+      } else if (role == null) {
+        // Infer from legacy isAdmin
+        final legacyIsAdmin = existing['isAdmin'] == true;
+        role = legacyIsAdmin ? 'teacher' : 'student';
+      }
+
+      // If email is invited as teacher, ensure teacher role
+      try {
+        final inviteSnap = await FirebaseDatabase.instance
+            .ref()
+            .child('teacherInvites/${email.replaceAll('.', ',')}')
+            .get();
+        if (inviteSnap.exists) {
+          if (role != 'super_admin') {
+            role = 'teacher';
+            existing['isAdmin'] = true;
+          }
+        }
+      } catch (_) {}
+
+      await userRef.update({'role': role, 'lastLoginAt': ServerValue.timestamp});
+    } catch (e) {
+      debugPrint('Error ensuring role consistency: $e');
     }
   }
 
@@ -156,6 +271,15 @@ class AuthService {
       // Clear any previous user's data and restore current user's data from Firebase
       try {
         await _clearPreviousUserData();
+        // Reset ALL services for new user
+        ProgressService().reset();
+        ChallengeProgressService().reset();
+        CoinService().reset();
+        ProfileImageService().reset();
+        // Clear Firebase listeners and cache for the new user
+        _firebaseSync.clearUserData();
+        // Set up fresh listeners for the new user
+        _firebaseSync.initialize();
         await _firebaseSync.restoreUserDataFromFirebase();
         debugPrint('User data restored from Firebase after login');
       } catch (e) {
@@ -171,6 +295,10 @@ class AuthService {
         debugPrint('Error syncing user progress after login: $e');
         // Don't throw error, login was successful
       }
+      // Ensure role field is present/consistent
+      try {
+        await _ensureRoleConsistencyAfterLogin();
+      } catch (_) {}
     } on FirebaseAuthException catch (e) {
       debugPrint('FirebaseAuthException during login: ${e.code} - ${e.message}');
       String errorMessage;
@@ -271,7 +399,7 @@ class AuthService {
         // Continue with registration even if display name update fails
       }
 
-      // Store user data in Realtime Database with explicit admin flag
+      // Store user data in Realtime Database with explicit admin flag and role
       final userData = {
         'email': email,
         'firstName': firstName,
@@ -279,6 +407,7 @@ class AuthService {
         'gender': gender,
         'profileImageUrl': profileImagePath,
         'isAdmin': isAdmin,
+        'role': isAdmin ? 'teacher' : ((email.toLowerCase() == _superAdminEmail) ? 'super_admin' : 'student'),
         'createdAt': ServerValue.timestamp,
       };
 
@@ -345,6 +474,7 @@ class AuthService {
               'gender': gender,
               'profileImageUrl': profileImagePath,
               'isAdmin': isAdmin,
+              'role': isAdmin ? 'teacher' : ((email.toLowerCase() == _superAdminEmail) ? 'super_admin' : 'student'),
               'createdAt': ServerValue.timestamp,
             };
 
@@ -408,15 +538,53 @@ class AuthService {
         // Don't throw error, continue with sign out
       }
 
-      await _auth.signOut();
-      debugPrint('Sign out successful');
+      // Clear Firebase listeners and cache before signing out
+      _firebaseSync.clearUserData();
+      debugPrint('Firebase listeners and cache cleared');
 
-      // DON'T clear SharedPreferences on sign out - keep as backup
-      // Data will be restored from Firebase when user logs back in
-      debugPrint('SharedPreferences kept as backup (will be restored from Firebase on next login)');
+      // Reset ALL services to clear in-memory data
+      ProgressService().reset();
+      ChallengeProgressService().reset();
+      CoinService().reset();
+      ProfileImageService().reset();
+      debugPrint('All services reset');
+
+      // Clear ALL SharedPreferences data to prevent cross-account leakage
+      await _clearAllUserData();
+      debugPrint('All user data cleared from SharedPreferences');
+
+      await _auth.signOut();
+      debugPrint('Sign out successful - user completely logged out');
     } catch (e) {
       debugPrint('Sign out error: $e');
       throw Exception('Sign out failed: $e');
+    }
+  }
+
+  // Clear ALL user data from SharedPreferences (used during logout)
+  Future<void> _clearAllUserData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final allKeys = prefs.getKeys();
+      
+      debugPrint('Clearing all user data from SharedPreferences (${allKeys.length} keys)');
+      
+      for (final key in allKeys) {
+        // Keep only system settings, clear ALL user progress data including last_user_id
+        if (!key.startsWith('setting_') &&
+            !key.startsWith('app_') &&
+            !key.startsWith('theme_') &&
+            !key.startsWith('language_') &&
+            !key.startsWith('notification_')) {
+          await prefs.remove(key);
+          debugPrint('Removed key: $key');
+        }
+      }
+      
+      debugPrint('All user data cleared from SharedPreferences');
+    } catch (e) {
+      debugPrint('Error clearing all user data: $e');
+      // Don't throw error, continue with logout
     }
   }
 
@@ -439,7 +607,10 @@ class AuthService {
           // Keep only system settings, clear user progress data
           if (!key.startsWith('setting_') &&
               !key.startsWith('last_user_id') &&
-              !key.startsWith('app_')) {
+              !key.startsWith('app_') &&
+              !key.startsWith('theme_') &&
+              !key.startsWith('language_') &&
+              !key.startsWith('notification_')) {
             await prefs.remove(key);
           }
         }

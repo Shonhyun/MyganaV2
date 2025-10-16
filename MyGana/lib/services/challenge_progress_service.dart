@@ -12,6 +12,12 @@ class ChallengeProgressService {
 
   ChallengeProgressService._internal();
 
+  // Reset service (useful when user changes)
+  void reset() {
+    _prefs = null;
+    print('ChallengeProgressService reset for user change');
+  }
+
   Future<SharedPreferences> get prefs async {
     if (_prefs != null) return _prefs!;
     _prefs = await SharedPreferences.getInstance();

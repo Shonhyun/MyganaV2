@@ -11,6 +11,10 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'screens/admin/admin_main_screen.dart';
 import 'screens/admin/admin_route_guard.dart';
+import 'screens/super_admin/super_admin_main_screen.dart';
+import 'screens/super_admin/super_admin_route_guard.dart';
+import 'screens/super_admin/super_admin_content_lists.dart';
+import 'screens/super_admin/super_admin_content_details.dart';
 import 'screens/auth_screen.dart';
 import 'screens/lessons_screen.dart';
 
@@ -77,7 +81,7 @@ void main() async {
     final authService = AuthService();
     await authService.syncUserProgressOnAppStart();
 
-    // Restore user data from Firebase if user is authenticated
+    // Restore user data from Firebase if user is authenticated (authoritative source)
     if (authService.currentUser != null) {
       await firebaseSync.restoreUserDataFromFirebase();
       // Force sync current points to ensure they're up to date
@@ -162,6 +166,28 @@ class NihongoApp extends StatelessWidget {
         '/admin': (context) => const AdminRouteGuard(
               child: AdminMainScreen(),
             ),
+        '/super_admin': (context) => const SuperAdminRouteGuard(
+              child: SuperAdminMainScreen(),
+            ),
+        '/super_admin/content/lessons': (context) => const SuperAdminRouteGuard(
+              child: SuperAdminLessonsListScreen(),
+            ),
+        '/super_admin/content/quizzes': (context) => const SuperAdminRouteGuard(
+              child: SuperAdminQuizzesListScreen(),
+            ),
+        '/super_admin/content/classes': (context) => const SuperAdminRouteGuard(
+              child: SuperAdminClassesListScreen(),
+            ),
+        // Full details
+        '/super_admin/detail/lesson': (context) => const SuperAdminRouteGuard(
+              child: _LessonDetailsRouteAdapter(),
+            ),
+        '/super_admin/detail/quiz': (context) => const SuperAdminRouteGuard(
+              child: _QuizDetailsRouteAdapter(),
+            ),
+        '/super_admin/detail/class': (context) => const SuperAdminRouteGuard(
+              child: _ClassDetailsRouteAdapter(),
+            ),
       },
     );
   }
@@ -209,5 +235,36 @@ class NihongoApp extends StatelessWidget {
       default:
         return Brightness.dark;
     }
+  }
+}
+
+// Route adapters to pass arguments through named routes
+class _LessonDetailsRouteAdapter extends StatelessWidget {
+  const _LessonDetailsRouteAdapter();
+  @override
+  Widget build(BuildContext context) {
+    final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+    final lessonId = args?['lessonId']?.toString() ?? '';
+    return SuperAdminLessonDetailsScreen(lessonId: lessonId);
+  }
+}
+
+class _QuizDetailsRouteAdapter extends StatelessWidget {
+  const _QuizDetailsRouteAdapter();
+  @override
+  Widget build(BuildContext context) {
+    final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+    final quizId = args?['quizId']?.toString() ?? '';
+    return SuperAdminQuizDetailsScreen(quizId: quizId);
+  }
+}
+
+class _ClassDetailsRouteAdapter extends StatelessWidget {
+  const _ClassDetailsRouteAdapter();
+  @override
+  Widget build(BuildContext context) {
+    final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+    final classId = args?['classId']?.toString() ?? '';
+    return SuperAdminClassDetailsScreen(classId: classId);
   }
 }

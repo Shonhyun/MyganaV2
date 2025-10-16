@@ -18,6 +18,11 @@ class CoinService {
   // Default coin amount
   static const int _defaultCoins = 1000;
 
+  // Reset service (useful when user changes)
+  void reset() {
+    print('CoinService reset for user change');
+  }
+
   // Get current coin balance
   Future<int> getCoins() async {
     final prefs = await SharedPreferences.getInstance();

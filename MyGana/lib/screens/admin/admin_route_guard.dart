@@ -28,7 +28,7 @@ class AdminRouteGuard extends StatelessWidget {
         }
 
         return FutureBuilder<bool>(
-          future: AuthService().isAdmin(),
+          future: AuthService().isTeacher(),
           builder: (context, adminSnapshot) {
             if (adminSnapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
@@ -38,11 +38,11 @@ class AdminRouteGuard extends StatelessWidget {
               );
             }
 
-            final isAdmin = adminSnapshot.data ?? false;
-            if (!isAdmin) {
+            final hasTeacherAccess = adminSnapshot.data ?? false;
+            if (!hasTeacherAccess) {
               return const Scaffold(
                 body: Center(
-                  child: Text('Access Denied: Admin privileges required'),
+                  child: Text('Access Denied: Teacher access required'),
                 ),
               );
             }

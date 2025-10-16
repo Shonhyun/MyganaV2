@@ -1,12 +1,18 @@
 import 'dart:developer' as developer;
 import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:confetti/confetti.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:nihongo_japanese_app/models/japanese_character.dart';
 import 'package:nihongo_japanese_app/models/user_progress.dart';
+import 'package:nihongo_japanese_app/services/challenge_progress_service.dart';
+import 'package:nihongo_japanese_app/services/coin_service.dart';
 import 'package:nihongo_japanese_app/services/database_service.dart';
+import 'package:nihongo_japanese_app/services/firebase_user_sync_service.dart';
+import 'package:nihongo_japanese_app/services/profile_image_service.dart';
 import 'package:nihongo_japanese_app/services/progress_service.dart';
 import 'package:nihongo_japanese_app/widgets/character_drawing_board.dart';
 import 'package:nihongo_japanese_app/widgets/character_stroke_animation.dart';
@@ -45,6 +51,10 @@ class _PracticeWritingScreenState extends State<PracticeWritingScreen>
   bool _showHints = true;
   bool _enableRecognition = true;
   bool _enableRealTimeRecognition = true;
+  // Marks per character (Goods/Excellent)
+  final Map<String, String> _characterMarks = {};
+  StreamSubscription<Map<String, dynamic>>? _marksSubscription;
+  StreamSubscription<User?>? _authStateSubscription;
 
   @override
   void initState() {
@@ -65,6 +75,40 @@ class _PracticeWritingScreenState extends State<PracticeWritingScreen>
 
     // Load user preferences
     _loadUserPreferences();
+
+    // Initial fetch of persisted marks from Firebase
+    _refreshMarksFromFirebase();
+    // Subscribe to real-time updates of marks
+    _marksSubscription = FirebaseUserSyncService().watchCharacterMarks().listen((marks) {
+      if (!mounted) return;
+      setState(() {
+        _characterMarks.clear();
+        marks.forEach((key, value) {
+          final map = Map<String, dynamic>.from(value as Map);
+          final mark = (map['mark'] ?? '').toString();
+          if (mark == 'goods' || mark == 'excellent') {
+            _characterMarks[key] = mark == 'excellent' ? 'Excellent' : 'Goods';
+          }
+        });
+      });
+    });
+
+    // Listen for auth state changes
+    _authStateSubscription = FirebaseAuth.instance.authStateChanges().listen((User? user) {
+      if (mounted) {
+        // Reset ALL services for new user
+        _progressService.reset();
+        ChallengeProgressService().reset();
+        CoinService().reset();
+        ProfileImageService().reset();
+        // Refresh Firebase listeners for the new user
+        FirebaseUserSyncService().refreshListeners();
+        // Refresh marks when auth state changes
+        _refreshMarksFromFirebase();
+        // Reload progress data
+        _loadProgressData();
+      }
+    });
   }
 
   Future<void> _loadUserPreferences() async {
@@ -174,6 +218,8 @@ class _PracticeWritingScreenState extends State<PracticeWritingScreen>
 
   @override
   void dispose() {
+    _marksSubscription?.cancel();
+    _authStateSubscription?.cancel();
     _tabController.removeListener(_updateSelectedCharacter);
     _tabController.dispose();
     _confettiController.dispose();
@@ -203,6 +249,22 @@ class _PracticeWritingScreenState extends State<PracticeWritingScreen>
       }
       // When hiding drawing board, don't change _expandedDrawingMode
     });
+  }
+
+  Future<void> _refreshMarksFromFirebase() async {
+    try {
+      final marks = await FirebaseUserSyncService().fetchCharacterMarks();
+      setState(() {
+        _characterMarks.clear();
+        marks.forEach((key, value) {
+          final map = Map<String, dynamic>.from(value as Map);
+          final mark = (map['mark'] ?? '').toString();
+          if (mark == 'goods' || mark == 'excellent') {
+            _characterMarks[key] = mark == 'excellent' ? 'Excellent' : 'Goods';
+          }
+        });
+      });
+    } catch (_) {}
   }
 
   // This method is called when the user clicks the minimize/expand button
@@ -447,10 +509,31 @@ class _PracticeWritingScreenState extends State<PracticeWritingScreen>
                                                 });
                                               },
                                               onRecognitionComplete: (result) {
-                                                // Handle recognition result
-                                                if (result.isCorrect) {
+                                                // Compute simple mark from accuracy
+                                                final accuracy = (result.accuracyScore ?? 0.0);
+                                                String mark;
+                                                if (accuracy >= 90.0) {
+                                                  mark = 'Excellent';
+                                                } else if (accuracy >= 70.0) {
+                                                  mark = 'Goods';
+                                                } else {
+                                                  mark = 'Failed';
+                                                }
+                                                if (mark == 'Excellent' || mark == 'Goods') {
+                                                  _characterMarks[_selectedCharacter!.character] = mark;
                                                   _confettiController.play();
                                                 }
+                                              },
+                                              onExitToSelection: () {
+                                                // Return to selection view and show animation
+                                                _refreshMarksFromFirebase().then((_) {
+                                                  if (!mounted) return;
+                                                  setState(() {
+                                                    _showDrawingBoard = false;
+                                                    _showAnimation = true;
+                                                    _expandedDrawingMode = false;
+                                                  });
+                                                });
                                               },
                                             ),
                                     ),
@@ -524,63 +607,65 @@ class _PracticeWritingScreenState extends State<PracticeWritingScreen>
 
                       // Character selection grid - hide in expanded mode
                       if (!_expandedDrawingMode)
-                        Container(
-                          height: 180,
-                          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surface,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 10,
-                                offset: const Offset(0, -2),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      'Select Character',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: colorScheme.primary,
-                                      ),
-                                    ),
-                                    Container(
-                                      padding:
-                                          const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: colorScheme.primary.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        _tabController.index == 0 ? "Hiragana" : "Katakana",
+                        Flexible(
+                          flex: 2,
+                          child: Container(
+                            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surface,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, -2),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Select Character',
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          fontSize: 12,
                                           color: colorScheme.primary,
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                      Container(
+                                        padding:
+                                            const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: colorScheme.primary.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          _tabController.index == 0 ? "Hiragana" : "Katakana",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                            color: colorScheme.primary,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              Expanded(
-                                child: TabBarView(
-                                  controller: _tabController,
-                                  children: [
-                                    _buildCharacterGrid(_hiraganaList),
-                                    _buildCharacterGrid(_katakanaList),
-                                  ],
+                                Expanded(
+                                  child: TabBarView(
+                                    controller: _tabController,
+                                    children: [
+                                      _buildCharacterGrid(_hiraganaList),
+                                      _buildCharacterGrid(_katakanaList),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                     ],
@@ -620,7 +705,7 @@ class _PracticeWritingScreenState extends State<PracticeWritingScreen>
         final isSelected = _selectedCharacter?.character == character.character;
         final progress = _characterProgress[character.character];
         final masteryLevel = progress?.masteryLevel ?? 0;
-        final isMastered = masteryLevel >= 80;
+        final isMastered = masteryLevel >= 70;
 
         return Stack(
           children: [
@@ -672,6 +757,29 @@ class _PracticeWritingScreenState extends State<PracticeWritingScreen>
                 ),
               ),
             ),
+            // Mark badge overlay (Goods/Excellent)
+            if (_characterMarks[character.character] != null)
+              Positioned(
+                right: 4,
+                top: 4,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _characterMarks[character.character] == 'Excellent'
+                        ? Colors.green
+                        : Colors.blue,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    _characterMarks[character.character]!,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
           ],
         );
       },

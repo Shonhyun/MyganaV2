@@ -159,7 +159,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           'email': _emailController.text.trim(),
           'gender': _selectedGender,
           'profileImageUrl': _profileImageUrl,
-          'isAdmin': false, // Preserve admin status
+          // Do not overwrite role/isAdmin here; only user-editable fields
           'updatedAt': ServerValue.timestamp,
         };
 

@@ -6,6 +6,7 @@ import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter/foundation.dart';
 import 'package:nihongo_japanese_app/models/japanese_character.dart';
 import 'package:nihongo_japanese_app/models/user_progress.dart';
 import 'package:nihongo_japanese_app/services/openai_vision_service.dart';
@@ -22,6 +23,7 @@ class CharacterDrawingBoard extends StatefulWidget {
   final bool enableRecognition;
   final bool enableRealTimeRecognition;
   final Function(RecognitionResult)? onRecognitionComplete;
+  final VoidCallback? onExitToSelection;
 
   const CharacterDrawingBoard({
     super.key,
@@ -34,6 +36,7 @@ class CharacterDrawingBoard extends StatefulWidget {
     this.enableRecognition = true,
     this.enableRealTimeRecognition = true,
     this.onRecognitionComplete,
+    this.onExitToSelection,
   });
 
   @override
@@ -61,6 +64,7 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
   final Color _strokeColor = Colors.deepPurple;
   final double _minBrushWidth = 4.0; // Slightly thicker for better visibility
   final double _maxBrushWidth = 16.0; // More dynamic range
+  double _brushScale = 1.0; // User-adjustable brush size multiplier
 
   // Drawing mode
   final bool _isGuidedMode = true;
@@ -76,6 +80,8 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
   bool _showRecognitionResult = false;
   bool _showRealTimeFeedback = false;
   bool _showDetailedFeedback = false;
+  String? _lastMarkLabel; // Excellent, Goods, Failed
+  bool _lastMarkPassing = false;
   String? _lastHandwrittenImageBase64;
   String? _lastReferenceImageBase64;
   late ConfettiController _confettiController;
@@ -227,10 +233,15 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
         _lastReferenceImageBase64 = resultWithImages.referenceImageBase64;
         _showRecognitionResult = true;
         _isRecognizing = false;
+        // Compute mark label and pass/fail
+        _lastMarkLabel = _computeMarkLabel(_lastRecognitionResult?.accuracyScore ?? 0.0);
+        _lastMarkPassing = _lastMarkLabel == 'Excellent' || _lastMarkLabel == 'Goods';
       });
 
-      // Update progress
-      await _updateProgress(resultWithImages.recognitionResult);
+      // Update progress only for passing marks
+      if (_lastMarkPassing) {
+        await _updateProgress(resultWithImages.recognitionResult);
+      }
 
       // Show confetti for correct recognition
       if (resultWithImages.recognitionResult.isCorrect) {
@@ -262,38 +273,30 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
     }
   }
 
+  String _computeMarkLabel(double accuracyPercent) {
+    // accuracyPercent expected 0-100
+    if (accuracyPercent >= 90.0) return 'Excellent';
+    if (accuracyPercent >= 70.0) return 'Goods';
+    return 'Failed';
+  }
+
   Future<void> _updateProgress(RecognitionResult result) async {
     try {
-      final characterProgress =
-          _progressService.getUserProgress().characterProgress[widget.character.character];
+      final double accuracyScore = (result.accuracyScore ?? 0.0);
+      final evaluation = StrokeEvaluation(
+        strokeCountScore: result.isCorrect ? 100.0 : 50.0,
+        strokeOrderScore: result.isCorrect ? 100.0 : 50.0,
+        positionScore: result.accuracyScore ?? 0.0,
+        directionScore: result.accuracyScore ?? 0.0,
+        overallScore: result.accuracyScore ?? 0.0,
+        evaluatedAt: DateTime.now(),
+      );
 
-      if (characterProgress != null) {
-        // Update mastery level based on accuracy
-        final accuracyScore = (result.accuracyScore ?? 0.0) / 100.0;
-        characterProgress.updateMastery(accuracyScore);
-
-        // Add stroke evaluation
-        characterProgress.addEvaluation(StrokeEvaluation(
-          strokeCountScore: result.isCorrect ? 100.0 : 50.0,
-          strokeOrderScore: result.isCorrect ? 100.0 : 50.0,
-          positionScore: result.accuracyScore ?? 0.0,
-          directionScore: result.accuracyScore ?? 0.0,
-          overallScore: result.accuracyScore ?? 0.0,
-          evaluatedAt: DateTime.now(),
-        ));
-      } else {
-        // Create new character progress
-        final newProgress = CharacterProgress(
-          character: widget.character.character,
-          characterType: widget.character.type,
-        );
-        newProgress.updateMastery((result.accuracyScore ?? 0.0) / 100.0);
-        _progressService.getUserProgress().characterProgress[widget.character.character] =
-            newProgress;
-      }
-
-      // Save progress
-      await _progressService.saveProgress();
+      await _progressService.updateCharacterMastery(
+        widget.character,
+        accuracyScore,
+        evaluation,
+      );
     } catch (e) {
       debugPrint('Error updating progress: $e');
     }
@@ -303,6 +306,11 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final double toolbarScale = _toolbarScale(context);
+    final double horizontalPad = (8.0 * toolbarScale).clamp(4.0, 8.0);
+    final double verticalPad = (6.0 * toolbarScale).clamp(3.0, 6.0);
+    final double gap = (4.0 * toolbarScale).clamp(2.0, 4.0);
+    final double bottomOffset = math.max(8.0, 16.0 * toolbarScale);
 
     return Stack(
       children: [
@@ -355,12 +363,15 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
               final currentPoint = details.localPosition;
 
               setState(() {
-                _currentStroke.add(
+              // Create a new list so the painter detects the change and repaints
+              final updated = List<Offset>.from(_currentStroke)
+                ..add(
                   Offset(
                     currentPoint.dx / size.width,
                     currentPoint.dy / size.height,
                   ),
                 );
+              _currentStroke = updated;
               });
             }
           },
@@ -381,8 +392,8 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
                 strokes: _userStrokes,
                 currentStroke: _currentStroke,
                 strokeColor: _strokeColor,
-                minStrokeWidth: _minBrushWidth,
-                maxStrokeWidth: _maxBrushWidth,
+                minStrokeWidth: _minBrushWidth * _brushScale,
+                maxStrokeWidth: _maxBrushWidth * _brushScale,
               ),
               child: Container(),
             ),
@@ -419,12 +430,12 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
 
         // Drawing tools - compact version for fullscreen
         Positioned(
-          bottom: 16,
+          bottom: bottomOffset,
           left: 0,
           right: 0,
           child: Center(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: EdgeInsets.symmetric(horizontal: horizontalPad, vertical: verticalPad),
               decoration: BoxDecoration(
                 color: colorScheme.surface.withAlpha((0.85 * 255).round()),
                 borderRadius: BorderRadius.circular(30),
@@ -437,65 +448,79 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
                   ),
                 ],
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildCompactToolButton(
-                    icon: Icons.brush,
-                    isActive: true,
-                    onPressed: () {}, // Always active now
-                    tooltip: 'Brush',
-                  ),
-                  const SizedBox(width: 4),
-                  _buildCompactToolButton(
-                    icon: Icons.undo,
-                    onPressed: () {
-                      if (_userStrokes.isNotEmpty) {
-                        setState(() {
-                          _userStrokes.removeLast();
-                        });
-                      }
-                    },
-                    tooltip: 'Undo',
-                  ),
-                  const SizedBox(width: 4),
-                  _buildCompactToolButton(
-                    icon: Icons.delete,
-                    onPressed: _clearDrawing,
-                    tooltip: 'Clear',
-                  ),
-                  const SizedBox(width: 4),
-                  _buildCompactToolButton(
-                    icon: Icons.grid_on,
-                    isActive: _showGrid,
-                    onPressed: _toggleGrid,
-                    tooltip: 'Toggle Grid',
-                  ),
-                  const SizedBox(width: 4),
-                  _buildCompactToolButton(
-                    icon: Icons.format_shapes,
-                    isActive: _showSvgGuideline,
-                    onPressed: _toggleSvgGuideline,
-                    tooltip: 'Toggle Guideline',
-                  ),
-                  if (widget.enableRecognition) ...[
-                    const SizedBox(width: 4),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     _buildCompactToolButton(
-                      icon: Icons.check_circle,
-                      onPressed: _userStrokes.isNotEmpty ? _checkCharacter : null,
-                      isActive: _userStrokes.isNotEmpty,
-                      tooltip: 'Check Character',
-                      color: _userStrokes.isNotEmpty ? Colors.green : null,
+                      icon: Icons.brush,
+                      isActive: true,
+                      onPressed: _showBrushSizeDialog,
+                      tooltip: 'Brush',
                     ),
-                    const SizedBox(width: 4),
+                    SizedBox(width: gap),
                     _buildCompactToolButton(
-                      icon: Icons.api,
-                      onPressed: _testApi,
-                      tooltip: 'Test Recognition Service',
-                      color: Colors.blue,
+                      icon: Icons.undo,
+                      onPressed: (_currentStroke.isNotEmpty || _userStrokes.isNotEmpty)
+                          ? () {
+                              if (_currentStroke.isNotEmpty) {
+                                setState(() {
+                                  _currentStroke = <Offset>[]; // new instance for instant repaint
+                                });
+                              } else if (_userStrokes.isNotEmpty) {
+                                setState(() {
+                                  // Create a new list reference so the painter repaints immediately
+                                  final copied = List<List<Offset>>.from(_userStrokes);
+                                  copied.removeLast();
+                                  _userStrokes = copied;
+                                });
+                              }
+                              HapticFeedback.selectionClick();
+                            }
+                          : null,
+                      isActive: _currentStroke.isNotEmpty || _userStrokes.isNotEmpty,
+                      tooltip: 'Undo',
                     ),
+                    SizedBox(width: gap),
+                    _buildCompactToolButton(
+                      icon: Icons.delete,
+                      onPressed: _clearDrawing,
+                      tooltip: 'Clear',
+                    ),
+                    SizedBox(width: gap),
+                    _buildCompactToolButton(
+                      icon: Icons.grid_on,
+                      isActive: _showGrid,
+                      onPressed: _toggleGrid,
+                      tooltip: 'Toggle Grid',
+                    ),
+                    SizedBox(width: gap),
+                    _buildCompactToolButton(
+                      icon: Icons.format_shapes,
+                      isActive: _showSvgGuideline,
+                      onPressed: _toggleSvgGuideline,
+                      tooltip: 'Toggle Guideline',
+                    ),
+                    if (widget.enableRecognition) ...[
+                      SizedBox(width: gap),
+                      _buildCompactToolButton(
+                        icon: Icons.check_circle,
+                        onPressed: _userStrokes.isNotEmpty ? _checkCharacter : null,
+                        isActive: _userStrokes.isNotEmpty,
+                        tooltip: 'Check Character',
+                        color: _userStrokes.isNotEmpty ? Colors.green : null,
+                      ),
+                      SizedBox(width: gap),
+                      _buildCompactToolButton(
+                        icon: Icons.api,
+                        onPressed: _testApi,
+                        tooltip: 'Test Recognition Service',
+                        color: Colors.blue,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
@@ -513,11 +538,15 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
   }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final double scale = _toolbarScale(context);
+    final double iconSize = (18.0 * scale).clamp(9.0, 16.0);
+    final double padding = (8.0 * scale).clamp(2.0, 6.0);
+    final double minSize = (36.0 * scale).clamp(22.0, 32.0);
 
     return Tooltip(
       message: tooltip ?? '',
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 2),
+        margin: EdgeInsets.symmetric(horizontal: math.max(0.5, 1.5 * scale)),
         decoration: BoxDecoration(
           color: isActive
               ? color ?? colorScheme.primary
@@ -528,16 +557,95 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
           icon: Icon(
             icon,
             color: isActive ? colorScheme.onPrimary : color ?? colorScheme.onSurface,
-            size: 18,
+            size: iconSize,
           ),
           onPressed: onPressed,
-          padding: const EdgeInsets.all(8),
-          constraints: const BoxConstraints(
-            minWidth: 36,
-            minHeight: 36,
+          padding: EdgeInsets.all(padding),
+          constraints: BoxConstraints(
+            minWidth: minSize,
+            minHeight: minSize,
           ),
+          splashRadius: math.max(12.0, (minSize / 2) - 2),
         ),
       ),
+    );
+  }
+
+  double _toolbarScale(BuildContext context) {
+    final double width = MediaQuery.of(context).size.width;
+    if (width <= 320) return 0.6; // very small phones
+    if (width <= 360) return 0.75; // small phones
+    if (width <= 400) return 0.85; // compact width
+    return 1.0; // default
+  }
+
+  void _showBrushSizeDialog() {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        double tempScale = _brushScale;
+        final theme = Theme.of(context);
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Brush Size', style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Text('Small'),
+                      Expanded(
+                        child: Slider(
+                          value: tempScale,
+                          onChanged: (v) {
+                            setStateDialog(() {
+                              tempScale = v;
+                            });
+                            // Live update preview
+                            setState(() {
+                              _brushScale = v;
+                            });
+                          },
+                          min: 0.4,
+                          max: 1.6,
+                          divisions: 12,
+                          label: '${(tempScale * 100).round()}%',
+                          activeColor: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const Text('Large'),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          // Revert to previous scale if user cancels
+                          setState(() {
+                            _brushScale = tempScale;
+                          });
+                          Navigator.of(context).pop();
+                        },
+                        child: const Text('Close'),
+                      ),
+                    ],
+                  )
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -593,6 +701,11 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
     final result = _lastRecognitionResult!;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    // Reserve space so the overlay doesn't get covered by the bottom toolbar
+    final double scale = _toolbarScale(context);
+    final double minSize = (36.0 * scale).clamp(22.0, 32.0);
+    final double vPad = (6.0 * scale).clamp(3.0, 6.0);
+    final double reservedBottom = minSize + (vPad * 2) + 36; // toolbar height + extra spacing
 
     // Display results inline at the top of the drawing board
     return Positioned(
@@ -600,7 +713,7 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
       left: 0,
       right: 0,
       child: Container(
-        margin: const EdgeInsets.all(8),
+        margin: EdgeInsets.fromLTRB(8, 8, 8, reservedBottom),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: colorScheme.surface.withOpacity(0.95),
@@ -620,6 +733,59 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Overall result row (always visible, compact)
+            Row(
+              children: [
+                Icon(
+                  _lastMarkPassing ? Icons.emoji_events : Icons.error_outline,
+                  color: _lastMarkPassing ? Colors.green : Colors.red,
+                  size: 20,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _lastMarkLabel ?? (result.isCorrect ? 'Goods' : 'Failed'),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: _lastMarkPassing ? Colors.green : Colors.red,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                // Action buttons: Retake always, Exit only if passing
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton.icon(
+                      onPressed: () {
+                        _clearDrawing();
+                        setState(() {
+                          _showRecognitionResult = false;
+                        });
+                      },
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Retake'),
+                    ),
+                    if (_lastMarkPassing)
+                      TextButton.icon(
+                        onPressed: () {
+                          // Notify parent that recognition completed with passing mark
+                          final r = _lastRecognitionResult;
+                          if (r != null) {
+                            widget.onRecognitionComplete?.call(r);
+                          }
+                          // Ask parent to exit to selection
+                          widget.onExitToSelection?.call();
+                        },
+                        icon: const Icon(Icons.exit_to_app, size: 16),
+                        label: const Text('Exit'),
+                      ),
+                  ],
+                )
+              ],
+            ),
+            const SizedBox(height: 10),
             // Main result row - responsive layout
             Row(
               children: [
@@ -643,11 +809,11 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              result.isCorrect ? 'Correct!' : 'Try Again',
+                              _lastMarkLabel ?? (result.isCorrect ? 'Goods' : 'Failed'),
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
-                                color: result.isCorrect ? Colors.green : Colors.orange,
+                                color: _lastMarkPassing ? Colors.green : Colors.red,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -723,48 +889,18 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
 
                 const SizedBox(width: 8),
 
-                // Right side - Action buttons (fixed size)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _showDetailedFeedback = !_showDetailedFeedback;
-                        });
-                      },
-                      icon: Icon(_showDetailedFeedback ? Icons.expand_less : Icons.expand_more),
-                      tooltip: 'Toggle Details',
-                      iconSize: 18,
-                      padding: const EdgeInsets.all(4),
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                    ),
-                    IconButton(
-                      onPressed: () {
-                        setState(() {
-                          _showRecognitionResult = false;
-                        });
-                      },
-                      icon: const Icon(Icons.close),
-                      tooltip: 'Hide Results',
-                      iconSize: 18,
-                      padding: const EdgeInsets.all(4),
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                    ),
-                    IconButton(
-                      onPressed: () {
-                        _clearDrawing();
-                        setState(() {
-                          _showRecognitionResult = false;
-                        });
-                      },
-                      icon: const Icon(Icons.refresh),
-                      tooltip: 'Try Again',
-                      iconSize: 18,
-                      padding: const EdgeInsets.all(4),
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                    ),
-                  ],
+                // Right side - Details toggle only
+                IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _showDetailedFeedback = !_showDetailedFeedback;
+                    });
+                  },
+                  icon: Icon(_showDetailedFeedback ? Icons.expand_less : Icons.expand_more),
+                  tooltip: 'Toggle Details',
+                  iconSize: 18,
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
               ],
             ),
@@ -772,19 +908,23 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
             // Detailed feedback section (expandable)
             if (_showDetailedFeedback) ...[
               const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                constraints: const BoxConstraints(maxHeight: 400), // Limit height
-                decoration: BoxDecoration(
-                  color: colorScheme.surface.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: colorScheme.outline.withOpacity(0.3)),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  // Cap height to avoid overlapping the toolbar
+                  maxHeight: MediaQuery.of(context).size.height * 0.45,
                 ),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: colorScheme.outline.withOpacity(0.3)),
+                  ),
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(12, 12, 12, 12 + reservedBottom * 0.5),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                       // Uploaded images section
                       if (_lastHandwrittenImageBase64 != null ||
                           _lastReferenceImageBase64 != null) ...[
@@ -902,7 +1042,8 @@ class _CharacterDrawingBoardState extends State<CharacterDrawingBoard>
                           color: colorScheme.onSurface.withOpacity(0.8),
                         ),
                       ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1181,7 +1322,6 @@ class BrushDrawingPainter extends CustomPainter {
     // Draw completed strokes
     for (final stroke in strokes) {
       if (stroke.isEmpty) continue;
-
       _drawBrushStroke(canvas, size, stroke);
     }
 
@@ -1261,9 +1401,11 @@ class BrushDrawingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(BrushDrawingPainter oldDelegate) {
-    // Only repaint when strokes actually change for better performance
-    return oldDelegate.strokes != strokes ||
-        oldDelegate.currentStroke != currentStroke ||
-        oldDelegate.strokeColor != strokeColor;
+    // Repaint when any relevant input changes
+    return !identical(oldDelegate.strokes, strokes) ||
+        !listEquals(oldDelegate.currentStroke, currentStroke) ||
+        oldDelegate.strokeColor != strokeColor ||
+        oldDelegate.minStrokeWidth != minStrokeWidth ||
+        oldDelegate.maxStrokeWidth != maxStrokeWidth;
   }
 }

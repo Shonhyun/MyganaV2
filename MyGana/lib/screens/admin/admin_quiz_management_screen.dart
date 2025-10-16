@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:nihongo_japanese_app/theme/theme_provider.dart';
+// Removed app bar/theme actions for minimal mobile view
 import 'admin_quiz_screen.dart';
 
 class AdminQuizManagementScreen extends StatelessWidget {
@@ -8,33 +7,7 @@ class AdminQuizManagementScreen extends StatelessWidget {
 
   final List<String> levels = const ['Beginner', 'Intermediate', 'Advanced'];
 
-  // Get theme icon for display
-  IconData _getThemeIcon(AppThemeMode mode) {
-    switch (mode) {
-      case AppThemeMode.system:
-        return Icons.phone_android;
-      case AppThemeMode.light:
-        return Icons.light_mode;
-      case AppThemeMode.dark:
-        return Icons.dark_mode;
-      case AppThemeMode.sakura:
-        return Icons.local_florist;
-      case AppThemeMode.matcha:
-        return Icons.eco;
-      case AppThemeMode.sunset:
-        return Icons.wb_sunny;
-      case AppThemeMode.ocean:
-        return Icons.water;
-      case AppThemeMode.lavender:
-        return Icons.spa;
-      case AppThemeMode.autumn:
-        return Icons.park;
-      case AppThemeMode.fuji:
-        return Icons.landscape;
-      case AppThemeMode.blueLight:
-        return Icons.blur_on;
-    }
-  }
+  // Theme icon logic removed with the app bar
 
   Color _getLevelColor(String level, BuildContext context) {
     switch (level) {
@@ -69,83 +42,6 @@ class AdminQuizManagementScreen extends StatelessWidget {
     final isDesktop = screenWidth > 900;
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text('Quiz Management'),
-        backgroundColor: Colors.transparent,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-        elevation: 0,
-        centerTitle: true,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Theme.of(context).colorScheme.primary,
-                Theme.of(context).colorScheme.primary.withOpacity(0.8),
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          // Add theme switcher button
-          Consumer<ThemeProvider>(
-            builder: (context, themeProvider, child) {
-              return Container(
-                margin: const EdgeInsets.only(right: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: PopupMenuButton<AppThemeMode>(
-                  icon: const Icon(Icons.palette, color: Colors.white),
-                  tooltip: 'Change Theme',
-                  onSelected: (AppThemeMode theme) {
-                    themeProvider.setAppTheme(theme);
-                  },
-                  itemBuilder: (BuildContext context) {
-                    return AppThemeMode.values.map((AppThemeMode theme) {
-                      return PopupMenuItem<AppThemeMode>(
-                        value: theme,
-                        child: Row(
-                          children: [
-                            Icon(
-                              _getThemeIcon(theme),
-                              color: themeProvider.appThemeMode == theme 
-                                  ? Theme.of(context).colorScheme.primary 
-                                  : Theme.of(context).colorScheme.onSurface,
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              themeProvider.getThemeName(theme),
-                              style: TextStyle(
-                                color: themeProvider.appThemeMode == theme 
-                                    ? Theme.of(context).colorScheme.primary 
-                                    : Theme.of(context).colorScheme.onSurface,
-                                fontWeight: themeProvider.appThemeMode == theme 
-                                    ? FontWeight.bold 
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList();
-                  },
-                ),
-              );
-            },
-          ),
-        ],
-      ),
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -165,7 +61,7 @@ class AdminQuizManagementScreen extends StatelessWidget {
           ),
           child: ListView.builder(
             padding: EdgeInsets.only(
-              top: isDesktop ? 120 : isTablet ? 100 : 80,
+              top: isDesktop ? 40 : isTablet ? 28 : 16,
               bottom: isDesktop ? 32 : isTablet ? 24 : 16,
             ),
             itemCount: levels.length + 1,

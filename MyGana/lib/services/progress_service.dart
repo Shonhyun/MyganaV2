@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 import 'package:nihongo_japanese_app/models/japanese_character.dart';
 import 'package:nihongo_japanese_app/models/progress_model.dart';
 import 'package:nihongo_japanese_app/models/story.dart';
 import 'package:nihongo_japanese_app/models/user_progress.dart';
 import 'package:nihongo_japanese_app/services/firebase_user_sync_service.dart';
+import 'package:nihongo_japanese_app/services/database_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ProgressService {
@@ -17,6 +19,18 @@ class ProgressService {
   Progress? _dashboardProgress;
   bool _isInitialized = false;
   final FirebaseUserSyncService _firebaseSync = FirebaseUserSyncService();
+  final ValueNotifier<int> _progressTicks = ValueNotifier<int>(0);
+
+  ValueListenable<int> get progressTicks => _progressTicks;
+
+  // Reset progress service (useful when user changes)
+  void reset() {
+    _userProgress = UserProgress();
+    _dashboardProgress = null;
+    _isInitialized = false;
+    _progressTicks.value = 0;
+    print('ProgressService reset for user change');
+  }
 
   // Initialize progress from storage
   Future<void> initialize() async {
@@ -200,6 +214,8 @@ class ProgressService {
 
       // Sync comprehensive data to Firebase
       await _firebaseSync.syncUserProgressToFirebase();
+      // Notify listeners that progress changed
+      _progressTicks.value = _progressTicks.value + 1;
     } catch (e) {
       print('Error saving progress: $e');
     }
@@ -243,9 +259,49 @@ class ProgressService {
 
     await saveProgress();
 
+    // Persist to Firebase immediately for cross-device persistence
+    try {
+      final mark = score >= 90.0
+          ? 'excellent'
+          : score >= 70.0
+              ? 'goods'
+              : 'failed';
+      await _firebaseSync.setCharacterMark(
+        characterId: charKey,
+        script: character.type,
+        mark: mark,
+        scorePercent: score.round(),
+      );
+    } catch (_) {}
+
     // Sync to Firebase
     await _firebaseSync.syncXpChange(_userProgress.totalXp, _userProgress.level);
     await _firebaseSync.syncStreakChange(_userProgress.currentStreak, _userProgress.longestStreak);
+    // Also tick notifier for immediate UI updates
+    _progressTicks.value = _progressTicks.value + 1;
+  }
+
+  // Compute completion fraction against the actual total characters in the script
+  Future<double> getScriptCompletionFraction(String characterType) async {
+    if (!_isInitialized) await initialize();
+
+    final db = DatabaseService();
+    int total;
+    if (characterType == 'hiragana') {
+      total = (await db.getHiragana()).length;
+    } else if (characterType == 'katakana') {
+      total = (await db.getKatakana()).length;
+    } else {
+      total = 0;
+    }
+
+    if (total == 0) return 0.0;
+
+    final completed = _userProgress.characterProgress.values
+        .where((p) => p.characterType == characterType && p.masteryLevel >= 70.0)
+        .length;
+
+    return completed / total;
   }
 
   // Update story progress
