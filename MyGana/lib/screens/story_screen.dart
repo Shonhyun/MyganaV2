@@ -7,6 +7,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/story_data.dart';
+import '../data/dynamic_questions.dart';
 import '../services/firebase_user_sync_service.dart';
 import '../services/progress_service.dart';
 import 'difficulty_selection_screen.dart';
@@ -46,12 +47,7 @@ enum HapticFeedbackType {
 }
 
 class StoryScreen extends StatefulWidget {
-  final Difficulty difficulty;
-
-  const StoryScreen({
-    super.key,
-    required this.difficulty,
-  });
+  const StoryScreen({super.key});
 
   @override
   State<StoryScreen> createState() => _StoryScreenState();
@@ -62,6 +58,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
   int _currentStoryIndex = 0;
   bool _showingQuestion = false;
   String? _selectedAnswer;
+  bool _answerConfirmed = false; // NEW: Track if answer is confirmed for checking
   bool _showingFeedback = false;
   bool _isCorrect = false;
   bool _showingCompletionScreen = false;
@@ -74,7 +71,111 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
   // NEW: Lives system
   double _lives = 5.0; // Start with 5 full hearts
   static const double _maxLives = 5.0;
-  static const double _livesLostPerWrongAnswer = 0.5;
+  static const double _livesLostPerWrongAnswer = 1.0; // Deduct 1 full life per wrong answer
+
+  // Hint system for dynamic difficulty
+  int _hintsUsedTotal = 0;
+
+  // Dynamic difficulty system
+  Difficulty _currentDifficulty = Difficulty.EASY;
+  int _consecutiveCorrectAnswers = 0;
+  int _currentInteractionIndex = 0;
+  bool _isHoldingInteraction = false;
+
+  // Dynamic question system methods
+  void _updateQuestionForCurrentBeat() {
+    if (_currentStoryIndex < _currentStoryBeats.length) {
+      final currentBeat = _currentStoryBeats[_currentStoryIndex];
+      if (currentBeat.question != null) {
+        // Replace the question with a random one from the appropriate difficulty pool
+        final newQuestion = getRandomQuestionForDifficulty(_currentDifficulty);
+        
+        // Create a new StoryBeat with the updated question
+        final updatedBeat = StoryBeat(
+          text: currentBeat.text,
+          speaker: currentBeat.speaker,
+          background: currentBeat.background,
+          character: currentBeat.character,
+          characterPosition: currentBeat.characterPosition,
+          question: Question(
+            text: newQuestion.text,
+            options: newQuestion.options,
+            correctAnswer: newQuestion.correctAnswer,
+            customHint: newQuestion.customHint,
+          ),
+          harukiExpression: currentBeat.harukiExpression,
+          soundFile: currentBeat.soundFile,
+          bgmFile: currentBeat.bgmFile,
+        );
+        
+        // Replace the current beat
+        _currentStoryBeats[_currentStoryIndex] = updatedBeat;
+      }
+    }
+  }
+
+  // Scan forward to find the next question and randomize it
+  void _scanAndRandomizeNextQuestion() {
+    // Look ahead from current position to find the next question
+    for (int i = _currentStoryIndex; i < _currentStoryBeats.length; i++) {
+      final beat = _currentStoryBeats[i];
+      if (beat.question != null) {
+        // Found a question, randomize it
+        final newQuestion = getRandomQuestionForDifficulty(_currentDifficulty);
+        
+        final updatedBeat = StoryBeat(
+          text: beat.text,
+          speaker: beat.speaker,
+          background: beat.background,
+          character: beat.character,
+          characterPosition: beat.characterPosition,
+          question: Question(
+            text: newQuestion.text,
+            options: newQuestion.options,
+            correctAnswer: newQuestion.correctAnswer,
+            customHint: newQuestion.customHint,
+          ),
+          harukiExpression: beat.harukiExpression,
+          soundFile: beat.soundFile,
+          bgmFile: beat.bgmFile,
+        );
+        
+        _currentStoryBeats[i] = updatedBeat;
+        break; // Only randomize the next question, then stop
+      }
+    }
+  }
+
+  void _handleCorrectAnswer() {
+    _consecutiveCorrectAnswers++;
+    
+    // Progress difficulty based on consecutive correct answers
+    if (_consecutiveCorrectAnswers == 1) {
+      _currentDifficulty = Difficulty.NORMAL;
+    } else if (_consecutiveCorrectAnswers >= 2) {
+      _currentDifficulty = Difficulty.HARD;
+    }
+    
+    // Move to next interaction
+    _isHoldingInteraction = false;
+    _currentInteractionIndex++;
+  }
+
+  void _handleIncorrectAnswer() {
+    _consecutiveCorrectAnswers = 0;
+    
+    // Regress difficulty based on wrong answer
+    if (_currentDifficulty == Difficulty.HARD) {
+      _currentDifficulty = Difficulty.NORMAL;
+    } else if (_currentDifficulty == Difficulty.NORMAL) {
+      _currentDifficulty = Difficulty.EASY;
+    }
+    // If already at EASY, stay at EASY
+    
+    // Hold current interaction and change question
+    _isHoldingInteraction = true;
+    _updateQuestionForCurrentBeat();
+  }
 
   // Animation controllers
   late AnimationController _characterAnimationController;
@@ -149,6 +250,9 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
   String _floatingMessage = '';
   late AnimationController _floatingMessageController;
   late Animation<double> _floatingMessageAnimation;
+  
+  // Track if this is a repeat playthrough (no rewards)
+  bool _isRepeatPlaythrough = false;
 
   @override
   void initState() {
@@ -262,8 +366,14 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     // Hide system UI for full-screen experience
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
+    // Check if this is a repeat playthrough (no rewards)
+    _checkIfRepeatPlaythrough();
+    
     // Set story beats based on difficulty
-    _setStoryBeatsByDifficulty();
+    _setStoryBeats();
+    
+    // Initialize first question with easy difficulty
+    _scanAndRandomizeNextQuestion();
 
     // Initialize audio
     _initBackgroundMusic();
@@ -502,6 +612,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
         _showingFeedback = false;
         _showingQuestion = false;
         _selectedAnswer = null;
+        _answerConfirmed = false;
         _showHint = false;
         // Remove `_incorrectAttempts = 0;`
         // Remove `_showSkipOption = false;`
@@ -694,18 +805,17 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     );
   }
 
-  void _setStoryBeatsByDifficulty() {
-    switch (widget.difficulty) {
-      case Difficulty.EASY:
-        _currentStoryBeats = List.from(easyStoryBeats);
-        break;
-      case Difficulty.NORMAL:
-        _currentStoryBeats = List.from(normalStoryBeats);
-        break;
-      case Difficulty.HARD:
-        _currentStoryBeats = List.from(hardStoryBeats);
-        break;
-    }
+  void _setStoryBeats() {
+    // Use a single story flow - we'll use the normal story beats as the base
+    _currentStoryBeats = List.from(normalStoryBeats);
+  }
+
+  // Check if this is a repeat playthrough (no rewards)
+  Future<void> _checkIfRepeatPlaythrough() async {
+    final isCompleted = await StoryCompletionTracker.isStoryCompleted();
+    setState(() {
+      _isRepeatPlaythrough = isCompleted;
+    });
   }
 
   Future<void> _showLoadingScreen() async {
@@ -715,6 +825,9 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
 
     _playTransitionSound();
     await Future.delayed(const Duration(seconds: 2));
+
+    // Randomize the upcoming question after loading completes
+    _scanAndRandomizeNextQuestion();
 
     setState(() {
       _isLoading = false;
@@ -729,18 +842,18 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     // Base score calculation
     _totalScore = _correctAnswers * 100;
 
-    // Difficulty multiplier
-    switch (widget.difficulty) {
-      case Difficulty.EASY:
-        _totalScore = (_totalScore * 1.0).round();
-        break;
-      case Difficulty.NORMAL:
-        _totalScore = (_totalScore * 1.5).round();
-        break;
-      case Difficulty.HARD:
-        _totalScore = (_totalScore * 2.0).round();
-        break;
+    // Dynamic difficulty multiplier based on highest difficulty reached
+    // Calculate based on the difficulty progression achieved
+    double difficultyMultiplier = 1.0;
+    if (_consecutiveCorrectAnswers >= 2) {
+      difficultyMultiplier = 2.0; // Reached HARD difficulty
+    } else if (_consecutiveCorrectAnswers >= 1) {
+      difficultyMultiplier = 1.5; // Reached NORMAL difficulty
+    } else {
+      difficultyMultiplier = 1.0; // Stayed at EASY difficulty
     }
+    
+    _totalScore = (_totalScore * difficultyMultiplier).round();
 
     // Bonus for streaks
     _totalScore += _maxStreak * 50;
@@ -756,7 +869,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     // Calculate experience points
     _experiencePoints = _totalScore ~/ 10;
 
-    // Determine rank
+    // Determine rank based on performance
     if (_correctAnswers == 10 && _getHintsUsedForCurrentDifficulty() == 0 && _lives == _maxLives) {
       _playerRank = 'Kanji Master';
       _unlockedTitles.add('Perfect Scholar');
@@ -772,6 +885,12 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
 
   // Save story score to local storage
   Future<void> _saveStoryScore() async {
+    // Skip saving scores for repeat playthroughs
+    if (_isRepeatPlaythrough) {
+      print('Repeat playthrough detected - no rewards will be given');
+      return;
+    }
+    
     try {
       final prefs = await SharedPreferences.getInstance();
 
@@ -798,7 +917,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
       await prefs.setString(
           storySessionKey,
           {
-            'difficulty': widget.difficulty.toString(),
+            'difficulty': 'Dynamic',
             'score': _totalScore,
             'correctAnswers': _correctAnswers,
             'maxStreak': _maxStreak,
@@ -818,7 +937,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
         maxStreak: _maxStreak,
         hintsUsed: _getHintsUsedForCurrentDifficulty(),
         livesRemaining: _lives,
-        difficulty: widget.difficulty.toString(),
+        difficulty: 'Dynamic',
         playerRank: _playerRank,
       );
 
@@ -829,6 +948,11 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
   }
 
   void _checkAchievements() {
+    // Skip achievements for repeat playthroughs
+    if (_isRepeatPlaythrough) {
+      return;
+    }
+    
     List<String> newAchievements = [];
 
     if (_correctAnswers == 1 && !_achievements.contains('First Success')) {
@@ -966,6 +1090,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
       character: 'Prof Hoshino (Sad).png',
       characterPosition: CharacterPosition.center,
       harukiExpression: 'Haruki (Sad).png',
+      soundFile: 'assets/sounds/ProfHoshinoFail.mp3',
     );
 
     // Insert the failure dialogue right after the current position
@@ -976,8 +1101,10 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     _calculateFinalScore();
     _saveStoryScore(); // Save the score to local storage
     _playVictoryMusic();
-    // Mark difficulty as completed
-    DifficultyCompletionTracker.markDifficultyCompleted(widget.difficulty);
+    // Only mark story as completed on first completion
+    if (!_isRepeatPlaythrough) {
+      StoryCompletionTracker.markStoryCompleted();
+    }
     setState(() {
       _showingCompletionScreen = true;
     });
@@ -1052,20 +1179,18 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     if (_showingFeedback) {
       if (!_isCorrect) {
         // Show floating message for wrong answer
-        _showFloatingFeedback('Not quite right. Try again!');
+        // _showFloatingFeedback('Not quite right. Try again!');
 
-        // NEW: Lose lives on wrong answer
-        _loseLives();
-
-        // Check if lives are depleted (handled in _loseLives method)
+        // If lives are depleted, _loseLives already handled the failure flow
         if (_lives <= 0) {
-          return; // _loseLives already handles the failure flow
+          return;
         }
 
-        // Reset for another attempt
+        // Reset for another attempt with new question
         setState(() {
           _showingFeedback = false;
           _selectedAnswer = null;
+          _answerConfirmed = false;
           _streak = 0;
         });
         _dialogAnimationController.reset();
@@ -1091,6 +1216,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
             _showingFeedback = false;
             _showingQuestion = false;
             _selectedAnswer = null;
+            _answerConfirmed = false;
             _showHint = false;
             // Remove `_incorrectAttempts = 0;`
             // Remove `_showSkipOption = false;`
@@ -1103,6 +1229,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
             _showingFeedback = false;
             _showingQuestion = false;
             _selectedAnswer = null;
+            _answerConfirmed = false;
             _showHint = false;
             // Remove `_incorrectAttempts = 0;`
             // Remove `_showSkipOption = false;`
@@ -1132,12 +1259,14 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
         _showingFeedback = false;
         _showingQuestion = false;
         _selectedAnswer = null;
+        _answerConfirmed = false;
         _completedInteraction = endOfInteraction;
         _showHint = false;
         // Remove `_incorrectAttempts = 0;`
         // Remove `_showSkipOption = false;`
 
-        if (_currentStoryIndex < _currentStoryBeats.length - 1) {
+        // Only progress if not holding interaction
+        if (!_isHoldingInteraction && _currentStoryIndex < _currentStoryBeats.length - 1) {
           _currentStoryIndex++;
         }
       });
@@ -1162,22 +1291,8 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     }
 
     if (_showingQuestion) {
-      if (_selectedAnswer == null) return;
-
-      setState(() {
-        _isCorrect = _selectedAnswer == currentBeat.question!.correctAnswer;
-        _showingFeedback = true;
-        // if (!_isCorrect) {
-        //   _incorrectAttempts++;
-        // }
-      });
-
-      if (_isCorrect) {
-        _playCorrectSound();
-      } else {
-        _playIncorrectSound();
-      }
-
+      // Answer checking is now handled in _checkAnswer() method
+      // This prevents double-tap requirement
       return;
     }
 
@@ -1211,6 +1326,28 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     }
   }
 
+  void _checkAnswer() {
+    if (_selectedAnswer == null || !_answerConfirmed) return;
+    
+    final StoryBeat currentBeat = _currentStoryBeats[_currentStoryIndex];
+    if (currentBeat.question == null) return;
+    
+    setState(() {
+      _isCorrect = _selectedAnswer == currentBeat.question!.correctAnswer;
+      _showingFeedback = true;
+    });
+
+    if (_isCorrect) {
+      _playCorrectSound();
+      _handleCorrectAnswer();
+    } else {
+      _playIncorrectSound();
+      // Deduct lives immediately when answer is wrong
+      _loseLives();
+      _handleIncorrectAnswer();
+    }
+  }
+
   void _selectAnswer(String answer) {
     // Stop character sound when user selects an answer
     _stopCharacterSound();
@@ -1223,17 +1360,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
   void _showHintForQuestion() {
     setState(() {
       _showHint = true;
-      switch (widget.difficulty) {
-        case Difficulty.EASY:
-          _hintsUsedEasy++;
-          break;
-        case Difficulty.NORMAL:
-          _hintsUsedNormal++;
-          break;
-        case Difficulty.HARD:
-          _hintsUsedHard++;
-          break;
-      }
+      _hintsUsedTotal++;
     });
   }
 
@@ -1272,14 +1399,8 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
   }
 
   int _getHintsUsedForCurrentDifficulty() {
-    switch (widget.difficulty) {
-      case Difficulty.EASY:
-        return _hintsUsedEasy;
-      case Difficulty.NORMAL:
-        return _hintsUsedNormal;
-      case Difficulty.HARD:
-        return _hintsUsedHard;
-    }
+    // For dynamic difficulty, we'll use a single hint counter
+    return _hintsUsedTotal;
   }
 
   int _getRemainingHintsForCurrentDifficulty() {
@@ -1489,331 +1610,169 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
 
   Widget _buildCompletionScreen() {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.green.shade900.withOpacity(0.9),
-              Colors.green.shade700.withOpacity(0.8),
-              Colors.green.shade500.withOpacity(0.7),
-              Colors.black.withOpacity(0.9),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _completionFadeAnimation,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final screenWidth = constraints.maxWidth;
-                final screenHeight = constraints.maxHeight;
-
-                return Column(
-                  children: [
-                    // Animated Header (Journey Complete Section)
-                    Container(
-                      padding: EdgeInsets.all(screenWidth * 0.03),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: screenWidth * 0.05,
-                          vertical: screenHeight * 0.02,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.green.shade600,
-                              Colors.green.shade800,
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.3),
-                            width: 2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.4),
-                              blurRadius: 10,
-                              offset: const Offset(0, 5),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            // Star icon
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.1),
-                              ),
-                              child: Icon(
-                                Icons.star,
-                                color: Colors.yellow.shade300,
-                                size: screenWidth * 0.07,
-                              ),
-                            ),
-                            SizedBox(height: screenHeight * 0.015),
-                            // Journey Complete text
-                            Text(
-                              'JOURNEY COMPLETE!',
-                              style: TextStyle(
-                                fontSize: screenWidth * 0.07,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                fontFamily: 'TheLastShuriken',
-                                shadows: [
-                                  Shadow(
-                                    color: Colors.black.withOpacity(0.6),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Text(
-                              'Difficulty: ${widget.difficulty.toString().split('.').last}',
-                              style: TextStyle(
-                                fontSize: screenWidth * 0.04,
-                                color: _getDifficultyColor(),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
+      body: SafeArea(
+        child: OrientationBuilder(
+          builder: (context, orientation) {
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                // Background image - same as main game
+                Image.asset(
+                  'assets/images/backgrounds/Gate (Intro).png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.black,
+                      child: const Center(
+                        child: Icon(Icons.image_not_supported, color: Colors.white, size: 48),
                       ),
-                    ),
-
-                    // Main Content
-                    Expanded(
-                      child: Container(
-                        margin: EdgeInsets.symmetric(
-                          horizontal: screenWidth * 0.02,
-                          vertical: screenHeight * 0.01,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            // Stats and Achievements
-                            Container(
-                              width: double.infinity,
-                              padding: EdgeInsets.all(screenWidth * 0.02),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: Colors.green.withOpacity(0.3),
-                                ),
-                              ),
-                              child: Column(
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.emoji_events,
-                                        color: Colors.yellow.shade300,
-                                        size: screenWidth * 0.04,
-                                      ),
-                                      SizedBox(width: screenWidth * 0.01),
-                                      Text(
-                                        'Kanji Mastery Achieved',
-                                        style: TextStyle(
-                                          fontSize: screenWidth * 0.035,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  SizedBox(height: screenHeight * 0.01),
-                                  Text(
-                                    'Final Score: $_totalScore',
-                                    style: TextStyle(
-                                      fontSize: screenWidth * 0.025,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  Text(
-                                    'Rank: $_playerRank',
-                                    style: TextStyle(
-                                      fontSize: screenWidth * 0.025,
-                                      color: Colors.white70,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  SizedBox(height: screenHeight * 0.01),
-                                  // Stats
-                                  Wrap(
-                                    spacing: screenWidth * 0.02,
-                                    runSpacing: screenHeight * 0.01,
-                                    alignment: WrapAlignment.center,
-                                    children: [
-                                      _buildCompactStat(
-                                          'Correct', '$_correctAnswers/10', Icons.check_circle),
-                                      _buildCompactStat(
-                                          'Streak', '$_maxStreak', Icons.local_fire_department),
-                                      _buildCompactStat('Lives', '${_lives.toStringAsFixed(1)}/5',
-                                          Icons.favorite),
-                                      _buildCompactStat('XP', '+$_experiencePoints', Icons.star),
-                                    ],
-                                  ),
-                                  if (_achievements.isNotEmpty) ...[
-                                    SizedBox(height: screenHeight * 0.01),
-                                    Text(
-                                      'Achievements Unlocked',
-                                      style: TextStyle(
-                                        fontSize: screenWidth * 0.025,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    SizedBox(height: screenHeight * 0.005),
-                                    Wrap(
-                                      spacing: screenWidth * 0.01,
-                                      runSpacing: screenHeight * 0.005,
-                                      alignment: WrapAlignment.center,
-                                      children: _achievements
-                                          .map((achievement) => Chip(
-                                                label: Text(
-                                                  achievement,
-                                                  style: TextStyle(
-                                                    fontSize: screenWidth * 0.02,
-                                                    color: Colors.black,
-                                                  ),
-                                                ),
-                                                backgroundColor: Colors.yellow.withOpacity(0.8),
-                                                padding: EdgeInsets.symmetric(
-                                                    horizontal: screenWidth * 0.01),
-                                              ))
-                                          .toList(),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // Action Buttons
-                    Container(
-                      padding: EdgeInsets.all(screenWidth * 0.02),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Next Difficulty Button (if not HARD)
-                          if (widget.difficulty != Difficulty.HARD)
-                            Container(
-                              margin: EdgeInsets.only(right: screenWidth * 0.02),
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  SystemChrome.setPreferredOrientations([
-                                    DeviceOrientation.portraitUp,
-                                    DeviceOrientation.portraitDown,
-                                    DeviceOrientation.landscapeLeft,
-                                    DeviceOrientation.landscapeRight,
-                                  ]).then((_) {
-                                    if (mounted) {
-                                      Navigator.of(context).pushReplacement(
-                                        MaterialPageRoute(
-                                          builder: (context) => StoryScreen(
-                                            difficulty: widget.difficulty == Difficulty.EASY
-                                                ? Difficulty.NORMAL
-                                                : Difficulty.HARD,
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  });
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _getNextDifficultyColor(),
-                                  foregroundColor: Colors.white,
-                                  padding: EdgeInsets.all(screenWidth * 0.02),
-                                  shape: const CircleBorder(),
-                                  elevation: 4,
-                                ),
-                                child: Icon(
-                                  Icons.arrow_upward,
-                                  size: screenWidth * 0.04,
-                                ),
-                              ),
-                            ),
-                          // Replay Button
-                          Container(
-                            margin: EdgeInsets.only(right: screenWidth * 0.02),
-                            child: ElevatedButton(
-                              onPressed: () {
-                                SystemChrome.setPreferredOrientations([
-                                  DeviceOrientation.portraitUp,
-                                  DeviceOrientation.portraitDown,
-                                  DeviceOrientation.landscapeLeft,
-                                  DeviceOrientation.landscapeRight,
-                                ]).then((_) {
-                                  if (mounted) {
-                                    Navigator.of(context).pushReplacement(
-                                      MaterialPageRoute(
-                                        builder: (context) => StoryScreen(
-                                          difficulty: widget.difficulty,
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                });
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _getDifficultyColor(),
-                                foregroundColor: Colors.white,
-                                padding: EdgeInsets.all(screenWidth * 0.02),
-                                shape: const CircleBorder(),
-                                elevation: 4,
-                              ),
-                              child: Icon(
-                                Icons.replay,
-                                size: screenWidth * 0.04,
-                              ),
-                            ),
-                          ),
-                          // Main Menu Button
-                          ElevatedButton(
-                            onPressed: () {
-                              SystemChrome.setPreferredOrientations([
-                                DeviceOrientation.portraitUp,
-                                DeviceOrientation.portraitDown,
-                                DeviceOrientation.landscapeLeft,
-                                DeviceOrientation.landscapeRight,
-                              ]).then((_) {
-                                if (mounted) {
-                                  Navigator.of(context).pop();
-                                }
-                              });
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue.shade600,
-                              foregroundColor: Colors.white,
-                              padding: EdgeInsets.all(screenWidth * 0.02),
-                              shape: const CircleBorder(),
-                              elevation: 4,
-                            ),
-                            child: Icon(
-                              Icons.home,
-                              size: screenWidth * 0.04,
-                            ),
-                          ),
+                    );
+                  },
+                ),
+                
+                // Content overlay with full background shadow
+                FadeTransition(
+                  opacity: _completionFadeAnimation,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.7),
+                          Colors.black.withOpacity(0.5),
+                          Colors.black.withOpacity(0.8),
                         ],
                       ),
                     ),
-                  ],
-                );
-              },
-            ),
-          ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final screenWidth = constraints.maxWidth;
+                        final screenHeight = constraints.maxHeight;
+
+                        return Column(
+                          children: [
+                            // BOTTOM SECTION - Content and Actions
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    // Journey Complete Title and Description - Centered
+                                    Column(
+                                      children: [
+                                        Text(
+                                          'Journey Complete',
+                                          style: TextStyle(
+                                            fontSize: screenWidth * 0.04,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                            fontFamily: 'TheLastShuriken',
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Congratulations! You have successfully completed your Kanji mastery journey.',
+                                          style: TextStyle(
+                                            fontSize: screenWidth * 0.025,
+                                            color: Colors.white70,
+                                            height: 1.4,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        const SizedBox(height: 24),
+                                      ],
+                                    ),
+                                    
+                                    // Action Buttons
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        // Try Again Button
+                                        // Container(
+                                        //   margin: const EdgeInsets.only(right: 16),
+                                        //   child: ElevatedButton(
+                                        //     onPressed: () {
+                                        //       // Set landscape orientation immediately
+                                        //       SystemChrome.setPreferredOrientations([
+                                        //         DeviceOrientation.landscapeLeft,
+                                        //         DeviceOrientation.landscapeRight,
+                                        //       ]);
+                                              
+                                        //       // Navigate to new story screen
+                                        //       Navigator.of(context).pushReplacement(
+                                        //         MaterialPageRoute(
+                                        //           builder: (context) => const StoryScreen(),
+                                        //         ),
+                                        //       );
+                                        //     },
+                                        //     style: ElevatedButton.styleFrom(
+                                        //       backgroundColor: Colors.green.shade600,
+                                        //       foregroundColor: Colors.white,
+                                        //       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                        //       shape: RoundedRectangleBorder(
+                                        //         borderRadius: BorderRadius.circular(8),
+                                        //       ),
+                                        //       elevation: 4,
+                                        //     ),
+                                        //     child: Text(
+                                        //       'Try Again',
+                                        //       style: TextStyle(
+                                        //         fontSize: screenWidth * 0.025,
+                                        //         fontWeight: FontWeight.bold,
+                                        //         fontFamily: 'TheLastShuriken',
+                                        //       ),
+                                        //     ),
+                                        //   ),
+                                        // ),
+                                        // Home Button
+                                        ElevatedButton(
+                                          onPressed: () {
+                                            SystemChrome.setPreferredOrientations([
+                                              DeviceOrientation.portraitUp,
+                                              DeviceOrientation.portraitDown,
+                                              DeviceOrientation.landscapeLeft,
+                                              DeviceOrientation.landscapeRight,
+                                            ]).then((_) {
+                                              if (mounted) {
+                                                Navigator.of(context).pop();
+                                              }
+                                            });
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.blue.shade600,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            elevation: 4,
+                                          ),
+                                          child: Text(
+                                            'Home',
+                                            style: TextStyle(
+                                              fontSize: screenWidth * 0.025,
+                                              fontWeight: FontWeight.bold,
+                                              fontFamily: 'TheLastShuriken',
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -1858,253 +1817,222 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
 
   Widget _buildFailureScreen() {
     return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.red.shade900.withOpacity(0.9),
-              Colors.red.shade700.withOpacity(0.8),
-              Colors.red.shade500.withOpacity(0.7),
-              Colors.black.withOpacity(0.9),
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _completionFadeAnimation,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final screenWidth = constraints.maxWidth;
-                final screenHeight = constraints.maxHeight;
-
-                return Column(
-                  children: [
-                    // Animated Header (Game Over Section)
-                    Container(
-                      padding: EdgeInsets.all(screenWidth * 0.03),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: screenWidth * 0.05,
-                          vertical: screenHeight * 0.02,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.red.shade600,
-                              Colors.red.shade800,
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.3),
-                            width: 2,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.4),
-                              blurRadius: 10,
-                              offset: const Offset(0, 5),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            // Broken heart icon
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withOpacity(0.1),
-                              ),
-                              child: Icon(
-                                Icons.favorite,
-                                color: Colors.red.shade300,
-                                size: screenWidth * 0.07, // Larger icon
-                              ),
-                            ),
-                            SizedBox(height: screenHeight * 0.015),
-                            // Game Over text
-                            Text(
-                              'GAME OVER',
-                              style: TextStyle(
-                                fontSize: screenWidth * 0.07, // Larger font
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                fontFamily: 'TheLastShuriken',
-                                shadows: [
-                                  Shadow(
-                                    color: Colors.black.withOpacity(0.6),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Text(
-                              'Lives Depleted',
-                              style: TextStyle(
-                                fontSize: screenWidth * 0.04, // Larger font
-                                color: Colors.red.shade200,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
+      body: SafeArea(
+        child: OrientationBuilder(
+          builder: (context, orientation) {
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                // Background image - same as main game
+                Image.asset(
+                  'assets/images/backgrounds/Gate (Intro).png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.black,
+                      child: const Center(
+                        child: Icon(Icons.image_not_supported, color: Colors.white, size: 48),
                       ),
-                    ),
-
-                    // Main Content
-                    Expanded(
-                      child: Container(
-                        margin: EdgeInsets.symmetric(
-                          horizontal: screenWidth * 0.02,
-                          vertical: screenHeight * 0.01,
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            // Journey Progress
-                            Container(
-                              width: double.infinity,
-                              padding: EdgeInsets.all(screenWidth * 0.02),
-                              decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: Colors.red.withOpacity(0.3),
-                                ),
-                              ),
-                              child: Column(
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.flag,
-                                        color: Colors.red.shade300,
-                                        size: screenWidth * 0.04,
-                                      ),
-                                      SizedBox(width: screenWidth * 0.01),
-                                      Text(
-                                        'Journey Incomplete',
-                                        style: TextStyle(
-                                          fontSize: screenWidth * 0.035,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  SizedBox(height: screenHeight * 0.01),
-                                  Text(
-                                    'Your Kanji mastery wasn\'t strong enough to complete the trials.',
-                                    style: TextStyle(
-                                      fontSize: screenWidth * 0.025,
-                                      color: Colors.white70,
-                                      height: 1.4,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // Action Buttons
-                    Container(
-                      padding: EdgeInsets.all(screenWidth * 0.02),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Try Again Button
-                          Container(
-                            margin: EdgeInsets.only(right: screenWidth * 0.02),
-                            child: ElevatedButton(
-                              onPressed: () {
-                                SystemChrome.setPreferredOrientations([
-                                  DeviceOrientation.portraitUp,
-                                  DeviceOrientation.portraitDown,
-                                  DeviceOrientation.landscapeLeft,
-                                  DeviceOrientation.landscapeRight,
-                                ]).then((_) {
-                                  if (mounted) {
-                                    Navigator.of(context).pushReplacement(
-                                      MaterialPageRoute(
-                                        builder: (context) => StoryScreen(
-                                          difficulty: widget.difficulty,
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                });
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red.shade600,
-                                foregroundColor: Colors.white,
-                                padding: EdgeInsets.all(screenWidth * 0.02), // Smaller padding
-                                shape: const CircleBorder(),
-                                elevation: 4,
-                              ),
-                              child: Icon(
-                                Icons.refresh,
-                                size: screenWidth * 0.04, // Smaller icon
-                              ),
-                            ),
-                          ),
-                          // Main Menu Button
-                          ElevatedButton(
-                            onPressed: () {
-                              SystemChrome.setPreferredOrientations([
-                                DeviceOrientation.portraitUp,
-                                DeviceOrientation.portraitDown,
-                                DeviceOrientation.landscapeLeft,
-                                DeviceOrientation.landscapeRight,
-                              ]).then((_) {
-                                if (mounted) {
-                                  Navigator.of(context).pop();
-                                }
-                              });
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue.shade600,
-                              foregroundColor: Colors.white,
-                              padding: EdgeInsets.all(screenWidth * 0.02), // Smaller padding
-                              shape: const CircleBorder(),
-                              elevation: 4,
-                            ),
-                            child: Icon(
-                              Icons.home,
-                              size: screenWidth * 0.04, // Smaller icon
-                            ),
-                          ),
+                    );
+                  },
+                ),
+                
+                // Content overlay with full background shadow
+                FadeTransition(
+                  opacity: _completionFadeAnimation,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.7),
+                          Colors.black.withOpacity(0.5),
+                          Colors.black.withOpacity(0.8),
                         ],
                       ),
                     ),
-                  ],
-                );
-              },
-            ),
-          ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final screenWidth = constraints.maxWidth;
+                        final screenHeight = constraints.maxHeight;
+
+                        return Column(
+                          children: [
+                            // BOTTOM SECTION - Content and Actions
+                            Expanded(
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    // Journey Failed Title and Description - Centered
+                                    Column(
+                                      children: [
+                                        Text(
+                                          'Journey Failed',
+                                          style: TextStyle(
+                                            fontSize: screenWidth * 0.04,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                            fontFamily: 'TheLastShuriken',
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Your Kanji mastery wasn\'t strong enough to complete the trials.',
+                                          style: TextStyle(
+                                            fontSize: screenWidth * 0.025,
+                                            color: Colors.white70,
+                                            height: 1.4,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        const SizedBox(height: 24),
+                                      ],
+                                    ),
+                                  // Journey Progress
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(6),
+                                    // decoration: BoxDecoration(
+                                    //   color: Colors.red.withOpacity(0.2),
+                                    //   borderRadius: BorderRadius.circular(15),
+                                    //   border: Border.all(
+                                    //     color: Colors.red.withOpacity(0.5),
+                                    //     width: 2,
+                                    //   ),
+                                    // ),
+                                    // child: Column(
+                                    //   children: [
+                                    //     Row(
+                                    //       mainAxisAlignment: MainAxisAlignment.center,
+                                    //       children: [
+                                    //         Icon(
+                                    //           Icons.flag,
+                                    //           color: Colors.red.shade300,
+                                    //           size: screenWidth * 0.04,
+                                    //         ),
+                                    //         const SizedBox(width: 8),
+                                    //         Text(
+                                    //           'Journey Failed',
+                                    //           style: TextStyle(
+                                    //             fontSize: screenWidth * 0.035,
+                                    //             fontWeight: FontWeight.bold,
+                                    //             color: Colors.white,
+                                    //           ),
+                                    //         ),
+                                    //       ],
+                                    //     ),
+                                    //     const SizedBox(height: 2),
+                                    //     Text(
+                                    //       'Your Kanji mastery wasn\'t strong enough to complete the trials.',
+                                    //       style: TextStyle(
+                                    //         fontSize: screenWidth * 0.025,
+                                    //         color: Colors.white70,
+                                    //         height: 1.4,
+                                    //       ),
+                                    //       textAlign: TextAlign.center,
+                                    //     ),
+                                    //   ],
+                                    // ),
+                                  ),
+                                  
+
+                                  
+                                    // Action Buttons
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        // Try Again Button
+                                        // Container(
+                                        //   margin: const EdgeInsets.only(right: 16),
+                                        //   child: ElevatedButton(
+                                        //     onPressed: () {
+                                        //       // Set landscape orientation immediately
+                                        //       SystemChrome.setPreferredOrientations([
+                                        //         DeviceOrientation.landscapeLeft,
+                                        //         DeviceOrientation.landscapeRight,
+                                        //       ]);
+                                              
+                                        //       // Navigate to new story screen
+                                        //       Navigator.of(context).pushReplacement(
+                                        //         MaterialPageRoute(
+                                        //           builder: (context) => const StoryScreen(),
+                                        //         ),
+                                        //       );
+                                        //     },
+                                        //     style: ElevatedButton.styleFrom(
+                                        //       backgroundColor: Colors.red.shade600,
+                                        //       foregroundColor: Colors.white,
+                                        //       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                        //       shape: RoundedRectangleBorder(
+                                        //         borderRadius: BorderRadius.circular(8),
+                                        //       ),
+                                        //       elevation: 4,
+                                        //     ),
+                                        //     child: Text(
+                                        //       'Try Again',
+                                        //       style: TextStyle(
+                                        //         fontSize: screenWidth * 0.025,
+                                        //         fontWeight: FontWeight.bold,
+                                        //         fontFamily: 'TheLastShuriken',
+                                        //       ),
+                                        //     ),
+                                        //   ),
+                                        // ),
+                                        // Home Button
+                                        ElevatedButton(
+                                          onPressed: () {
+                                            SystemChrome.setPreferredOrientations([
+                                              DeviceOrientation.portraitUp,
+                                              DeviceOrientation.portraitDown,
+                                              DeviceOrientation.landscapeLeft,
+                                              DeviceOrientation.landscapeRight,
+                                            ]).then((_) {
+                                              if (mounted) {
+                                                Navigator.of(context).pop();
+                                              }
+                                            });
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.blue.shade600,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            elevation: 4,
+                                          ),
+                                          child: Text(
+                                            'Home',
+                                            style: TextStyle(
+                                              fontSize: screenWidth * 0.025,
+                                              fontWeight: FontWeight.bold,
+                                              fontFamily: 'TheLastShuriken',
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 
-  Color _getNextDifficultyColor() {
-    switch (widget.difficulty) {
-      case Difficulty.EASY:
-        return Colors.blue;
-      case Difficulty.NORMAL:
-        return Colors.red;
-      case Difficulty.HARD:
-        return Colors.purple;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -2131,7 +2059,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
         child: OrientationBuilder(
           builder: (context, orientation) {
             return GestureDetector(
-              onTap: _showingQuestion && _selectedAnswer == null ? null : _nextStoryBeat,
+              onTap: _showingQuestion && (_selectedAnswer == null || !_answerConfirmed) ? null : _nextStoryBeat,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -2192,25 +2120,25 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
                                   isRepeatingAnimation: false,
                                 ),
                                 const SizedBox(height: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: _getDifficultyColor().withOpacity(0.8),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: _getDifficultyColor(),
-                                      width: 2,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    'Difficulty: ${widget.difficulty.toString().split('.').last}',
-                                    style: TextStyle(
-                                      fontSize: MediaQuery.of(context).size.width * 0.015,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
+                                // Container(
+                                //   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                //   decoration: BoxDecoration(
+                                //     color: _getDifficultyColor().withOpacity(0.8),
+                                //     borderRadius: BorderRadius.circular(20),
+                                //     border: Border.all(
+                                //       color: _getDifficultyColor(),
+                                //       width: 2,
+                                //     ),
+                                //   ),
+                                //   // child: Text(
+                                //   //   'Difficulty: ${_currentDifficulty.toString().split('.').last}',
+                                //   //   style: TextStyle(
+                                //   //     fontSize: MediaQuery.of(context).size.width * 0.015,
+                                //   //     color: Colors.white,
+                                //   //     fontWeight: FontWeight.bold,
+                                //   //   ),
+                                //   // ),
+                                // ),
                                 const SizedBox(height: 16),
                               ],
                             ),
@@ -2589,13 +2517,13 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
   }
 
   Color _getDifficultyColor() {
-    switch (widget.difficulty) {
+    switch (_currentDifficulty) {
       case Difficulty.EASY:
-        return Colors.green;
+        return Colors.amber.shade300; // Light, warm yellow
       case Difficulty.NORMAL:
-        return Colors.blue;
+        return Colors.lightBlue.shade300; // Soft, pleasant blue
       case Difficulty.HARD:
-        return Colors.red;
+        return Colors.pink.shade300; // Gentle pink instead of harsh red
     }
   }
 
@@ -2685,15 +2613,15 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                Colors.purple.withOpacity(0.9),
-                Colors.indigo.withOpacity(0.9),
+                _getDifficultyColor().withOpacity(0.9),
+                _getDifficultyColor().withOpacity(0.7),
               ],
             ),
             borderRadius: BorderRadius.circular(15),
             border: Border.all(color: Colors.white.withOpacity(0.7), width: 2),
             boxShadow: [
               BoxShadow(
-                color: Colors.purple.withOpacity(0.4),
+                color: _getDifficultyColor().withOpacity(0.4),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -2878,6 +2806,11 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
                   _selectAnswer(option);
                   // Add haptic feedback
                   HapticFeedback.selectionClick();
+                  
+                  // Reset confirmation state when selecting new answer
+                  setState(() {
+                    _answerConfirmed = false;
+                  });
                 },
                 borderRadius: BorderRadius.circular(15),
                 child: AnimatedContainer(
@@ -2955,6 +2888,48 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
                 ),
               );
             }).toList(),
+          ),
+
+        // Confirm button - only show when answer is selected but not confirmed
+        if (_selectedAnswer != null && !_answerConfirmed)
+          Container(
+            margin: const EdgeInsets.only(top: 16),
+            child: Center(
+              child: ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _answerConfirmed = true;
+                  });
+                  _checkAnswer();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _getDifficultyColor(),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                  elevation: 4,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.check_circle_outline,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Confirm Answer',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
       ],
     );

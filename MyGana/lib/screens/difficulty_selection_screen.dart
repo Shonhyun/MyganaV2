@@ -8,18 +8,16 @@ enum Difficulty {
   HARD,
 }
 
-// Utility class for difficulty completion tracking
-class DifficultyCompletionTracker {
-  static Future<void> markDifficultyCompleted(Difficulty difficulty) async {
+// Utility class for story completion tracking
+class StoryCompletionTracker {
+  static Future<void> markStoryCompleted() async {
     final prefs = await SharedPreferences.getInstance();
-    String key = 'difficulty_${difficulty.toString().split('.').last.toLowerCase()}_completed';
-    await prefs.setBool(key, true);
+    await prefs.setBool('story_completed', true);
   }
 
-  static Future<bool> isDifficultyCompleted(Difficulty difficulty) async {
+  static Future<bool> isStoryCompleted() async {
     final prefs = await SharedPreferences.getInstance();
-    String key = 'difficulty_${difficulty.toString().split('.').last.toLowerCase()}_completed';
-    return prefs.getBool(key) ?? false;
+    return prefs.getBool('story_completed') ?? false;
   }
 }
 
@@ -31,11 +29,7 @@ class DifficultySelectionScreen extends StatefulWidget {
 }
 
 class _DifficultySelectionScreenState extends State<DifficultySelectionScreen> {
-  Map<Difficulty, bool> _completionStatus = {
-    Difficulty.EASY: false,
-    Difficulty.NORMAL: false,
-    Difficulty.HARD: false,
-  };
+  bool _isStoryCompleted = false;
 
   @override
   void initState() {
@@ -43,29 +37,19 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen> {
     _loadCompletionStatus();
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
   // Load completion status from SharedPreferences
   Future<void> _loadCompletionStatus() async {
-    final easyCompleted = await DifficultyCompletionTracker.isDifficultyCompleted(Difficulty.EASY);
-    final normalCompleted = await DifficultyCompletionTracker.isDifficultyCompleted(Difficulty.NORMAL);
-    final hardCompleted = await DifficultyCompletionTracker.isDifficultyCompleted(Difficulty.HARD);
-    
+    final storyCompleted = await StoryCompletionTracker.isStoryCompleted();
     setState(() {
-      _completionStatus[Difficulty.EASY] = easyCompleted;
-      _completionStatus[Difficulty.NORMAL] = normalCompleted;
-      _completionStatus[Difficulty.HARD] = hardCompleted;
+      _isStoryCompleted = storyCompleted;
     });
   }
 
-  void _selectDifficulty(Difficulty difficulty) async {
+  void _startStory() async {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => StoryScreen(difficulty: difficulty),
+        builder: (context) => const StoryScreen(),
       ),
     );
     // Refresh completion status when returning from story screen
@@ -257,7 +241,7 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen> {
                     
                     // Subtitle
                     Text(
-                      'Select your difficulty level',
+                      'Begin your adventure',
                       style: TextStyle(
                         fontSize: isLandscape 
                           ? screenSize.width * 0.02 
@@ -278,51 +262,8 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen> {
                     
                     SizedBox(height: isLandscape ? 32 : 48),
                     
-                    // Difficulty buttons - responsive layout
-                    isLandscape 
-                      ? Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _buildDifficultyButton(
-                              difficulty: Difficulty.EASY,
-                              color: Colors.green,
-                              description: 'For beginners',
-                            ),
-                            const SizedBox(width: 20),
-                            _buildDifficultyButton(
-                              difficulty: Difficulty.NORMAL,
-                              color: Colors.blue,
-                              description: 'Standard challenge',
-                            ),
-                            const SizedBox(width: 20),
-                            _buildDifficultyButton(
-                              difficulty: Difficulty.HARD,
-                              color: Colors.red,
-                              description: 'Advanced learners',
-                            ),
-                          ],
-                        )
-                      : Column(
-                          children: [
-                            _buildDifficultyButton(
-                              difficulty: Difficulty.EASY,
-                              color: Colors.green,
-                              description: 'For beginners',
-                            ),
-                            const SizedBox(height: 16),
-                            _buildDifficultyButton(
-                              difficulty: Difficulty.NORMAL,
-                              color: Colors.blue,
-                              description: 'Standard challenge',
-                            ),
-                            const SizedBox(height: 16),
-                            _buildDifficultyButton(
-                              difficulty: Difficulty.HARD,
-                              color: Colors.red,
-                              description: 'Advanced learners',
-                            ),
-                          ],
-                        ),
+                    // Start button
+                    _buildStartButton(),
                   ],
                 ),
               ),
@@ -333,19 +274,13 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen> {
     );
   }
 
-  Widget _buildDifficultyButton({
-    required Difficulty difficulty,
-    required Color color,
-    required String description,
-  }) {
+  Widget _buildStartButton() {
     final screenSize = MediaQuery.of(context).size;
     final isLandscape = screenSize.width > screenSize.height;
-    String difficultyText = difficulty.toString().split('.').last;
-    bool isCompleted = _completionStatus[difficulty] ?? false;
     
     return Container(
       width: isLandscape 
-        ? screenSize.width * 0.18 
+        ? screenSize.width * 0.3 
         : screenSize.width * 0.7,
       decoration: BoxDecoration(
         boxShadow: [
@@ -360,21 +295,21 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen> {
       child: Stack(
         children: [
           ElevatedButton(
-            onPressed: () => _selectDifficulty(difficulty),
+            onPressed: _startStory,
             style: ElevatedButton.styleFrom(
               padding: EdgeInsets.symmetric(
-                vertical: isLandscape ? 16 : 20,
-                horizontal: isLandscape ? 8 : 16,
+                vertical: isLandscape ? 20 : 24,
+                horizontal: isLandscape ? 16 : 20,
               ),
-              backgroundColor: isCompleted 
-                ? color.withOpacity(0.6) 
-                : color.withOpacity(0.8),
+              backgroundColor: _isStoryCompleted 
+                ? Colors.amber.withOpacity(0.6) 
+                : Colors.blue.withOpacity(0.8),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
                 side: BorderSide(
-                  color: isCompleted ? Colors.amber : color, 
-                  width: isCompleted ? 3 : 2,
+                  color: _isStoryCompleted ? Colors.amber : Colors.blue, 
+                  width: _isStoryCompleted ? 3 : 2,
                 ),
               ),
             ),
@@ -385,31 +320,31 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      difficultyText,
+                      _isStoryCompleted ? 'Play Again' : 'Start',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        fontSize: isLandscape ? 14 : 18,
+                        fontSize: isLandscape ? 18 : 22,
                         fontFamily: "TheLastShuriken"
                       ),
                     ),
-                    if (isCompleted) ...[
+                    if (_isStoryCompleted) ...[
                       SizedBox(width: 8),
                       Icon(
-                        Icons.check_circle,
-                        color: Colors.amber,
-                        size: isLandscape ? 16 : 20,
+                        Icons.replay,
+                        color: Colors.white,
+                        size: isLandscape ? 20 : 24,
                       ),
                     ],
                   ],
                 ),
-                SizedBox(height: isLandscape ? 6 : 8),
+                SizedBox(height: isLandscape ? 8 : 10),
                 Text(
-                  isCompleted ? 'Completed!' : description,
+                  _isStoryCompleted ? 'Continue your journey' : 'Begin your adventure',
                   style: TextStyle(
-                    fontSize: isLandscape ? 12 : 14,
-                    fontStyle: isCompleted ? FontStyle.normal : FontStyle.italic,
-                    fontWeight: isCompleted ? FontWeight.bold : FontWeight.normal,
-                    color: isCompleted ? Colors.amber : Colors.white,
+                    fontSize: isLandscape ? 14 : 16,
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.normal,
+                    color: Colors.white,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -417,7 +352,7 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen> {
             ),
           ),
           // Completion badge overlay
-          if (isCompleted)
+          if (_isStoryCompleted)
             Positioned(
               top: 8,
               right: 8,
@@ -431,7 +366,7 @@ class _DifficultySelectionScreenState extends State<DifficultySelectionScreen> {
                 child: Icon(
                   Icons.star,
                   color: Colors.white,
-                  size: isLandscape ? 12 : 16,
+                  size: isLandscape ? 16 : 20,
                 ),
               ),
             ),
